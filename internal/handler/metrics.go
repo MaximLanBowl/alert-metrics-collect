@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	models "github.com/MaximLanBowl/alert-metrics-collect/internal/model"
+	"github.com/rs/zerolog/log"
 )
 
 type MetricsStorage interface {
@@ -46,23 +47,24 @@ func (m *MetricsHandler) SetMetrics(w http.ResponseWriter, r *http.Request) {
 
 	switch mtype {
 	case models.Gauge:
-		mvalue, err := strconv.ParseFloat(mvalue, 64)
+		gaugeVal, err := strconv.ParseFloat(mvalue, 64)
 		if err != nil {
 			http.Error(w, "Metric gauge value is not a number", http.StatusBadRequest)
 			return
 		}
-		m.metricHandler.SetGauge(mname, mvalue)
+		m.metricHandler.SetGauge(mname, gaugeVal)
 	case models.Counter:
-		mvalue, err := strconv.ParseInt(mvalue, 10, 64)
+		counterVal, err := strconv.ParseInt(mvalue, 10, 64)
 		if err != nil {
 			http.Error(w, "Metric counter value is not a number", http.StatusBadRequest)
 			return
 		}
-		m.metricHandler.AddCounter(mname, mvalue)
+		m.metricHandler.AddCounter(mname, counterVal)
 	default:
 		http.Error(w, "Metric type is not supported", http.StatusBadRequest)
 		return
 	}
 
+	log.Info().Msgf("Metric %s set to %s", mname, mvalue)
 	w.WriteHeader(http.StatusOK)
 }
