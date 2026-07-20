@@ -69,7 +69,7 @@ func (m *MemStorage) GetCounter(name string) (int64, bool) {
 	return 0, false
 }
 
-func (m *MemStorage) GetMetrics() []models.Metrics {
+func (m *MemStorage) GetAll() []models.Metrics {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

@@ -21,7 +21,7 @@ type MetricsStorage interface {
 	AddCounter(name string, delta int64)
 	GetGauge(name string) (float64, bool)
 	GetCounter(name string) (int64, bool)
-	GetMetrics() []models.Metrics
+	GetAll() []models.Metrics
 }
 
 type MetricsHandler struct {
@@ -101,7 +101,7 @@ func (m *MetricsHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *MetricsHandler) GetMetricsList(w http.ResponseWriter, r *http.Request) {
-	metrics := m.metricHandler.GetMetrics()
+	metrics := m.metricHandler.GetAll()
 
 	w.Header().Set("Content-Type", "text/html, charset=utf-8")
 	w.WriteHeader(http.StatusOK)
