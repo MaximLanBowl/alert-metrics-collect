@@ -28,6 +28,6 @@ func run() error {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
 	log.Info().Msg("Server stopped")
-	
+
 	return nil
 }

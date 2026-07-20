@@ -44,3 +44,39 @@ func (m *MemStorage) AddCounter(name string, delta int64) {
 		Delta: &delta,
 	}
 }
+
+func (m *MemStorage) GetGauge(name string) (float64, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	val, ok := m.metrics[name]
+	if ok {
+		return *val.Value, true
+	}
+
+	return 0, false
+}
+
+func (m *MemStorage) GetCounter(name string) (int64, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	val, ok := m.metrics[name]
+	if ok {
+		return *val.Delta, true
+	}
+
+	return 0, false
+}
+
+func (m *MemStorage) GetMetrics() []models.Metrics {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	values := make([]models.Metrics, 0, len(m.metrics))
+	for _, v := range m.metrics {
+		values = append(values, v)
+	}
+
+	return values
+}
