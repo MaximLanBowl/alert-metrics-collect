@@ -3,7 +3,7 @@ package agent
 import "testing"
 
 func TestMemCollect(t *testing.T) {
-	m := NewMemCollect("http://localhost:8080")
+	m := NewMemCollect("http://localhost:8080", 10, 2)
 
 	m.collect()
 
@@ -29,7 +29,7 @@ func TestMemCollect(t *testing.T) {
 }
 
 func TestPollCountIncrements(t *testing.T) {
-	m := NewMemCollect("http://localhost:8080")
+	m := NewMemCollect("http://localhost:8080", 10, 2)
 
 	m.collect()
 	if got := m.counters["PollCount"]; got != 1 {
