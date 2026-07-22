@@ -9,12 +9,15 @@ import (
 
 func main() {
 	addr := flag.String("a", "localhost:8080", "server listen address")
-	reportInterval := flag.Duration("r", time.Second*10, "report timeout")
-	pollInterval := flag.Duration("p", time.Second*2, "poll timeout")
+	reportInterval := flag.Int("r", 10, "report timeout")
+	pollInterval := flag.Int("p", 2, "poll timeout")
+
 	flag.Parse()
 
 	baseURL := "http://" + *addr
+	rVal := time.Duration(*reportInterval) * time.Second
+	pVal := time.Duration(*pollInterval) * time.Second
 
-	collector := agent.NewMemCollect(baseURL, *reportInterval, *pollInterval)
+	collector := agent.NewMemCollect(baseURL, rVal, pVal)
 	collector.Run()
 }
