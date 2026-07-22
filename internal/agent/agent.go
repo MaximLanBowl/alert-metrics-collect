@@ -12,20 +12,21 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const (
-	pollInterval   = 2 * time.Second
-	reportInterval = 10 * time.Second
-)
-
 type MemCollect struct {
-	mu       sync.RWMutex
-	gauges   map[string]float64
-	counters map[string]int64
-	baseURL  string
-	client   *http.Client
+	mu             sync.RWMutex
+	gauges         map[string]float64
+	counters       map[string]int64
+	baseURL        string
+	client         *http.Client
+	pollInterval   time.Duration
+	reportInterval time.Duration
 }
 
-func NewMemCollect(baseURL string) *MemCollect {
+func NewMemCollect(
+	baseURL string,
+	report,
+	poll time.Duration,
+) *MemCollect {
 	return &MemCollect{
 		gauges:   make(map[string]float64),
 		counters: make(map[string]int64),
@@ -33,6 +34,8 @@ func NewMemCollect(baseURL string) *MemCollect {
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
+		reportInterval: report,
+		pollInterval:   poll,
 	}
 }
 
@@ -121,14 +124,14 @@ func (m *MemCollect) Send() {
 func (m *MemCollect) Run() {
 	go func() {
 		for {
-			time.Sleep(pollInterval)
+			time.Sleep(m.pollInterval)
 			m.collect()
 			log.Info().Msg("Runtime metrics collected")
 		}
 	}()
 
 	for {
-		time.Sleep(reportInterval)
+		time.Sleep(m.reportInterval)
 		m.Send()
 		log.Info().Msg("Metrics sent")
 	}

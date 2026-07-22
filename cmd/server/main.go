@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net/http"
 
@@ -10,9 +11,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const addr = "localhost:8080"
+var flagRunAddr string
 
 func main() {
+	parseFlags()
+
 	if err := run(); err != nil {
 		panic(err)
 	}
@@ -23,11 +26,16 @@ func run() error {
 	h := handler.NewMetricsHandler(storage)
 	r := router.New(h)
 
-	log.Info().Str("addr", addr).Msgf("Starting server")
-	if err := http.ListenAndServe(addr, r); err != nil {
+	log.Info().Str("addr", flagRunAddr).Msgf("Starting server")
+	if err := http.ListenAndServe(flagRunAddr, r); err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
 	log.Info().Msg("Server stopped")
 
 	return nil
+}
+
+func parseFlags() {
+	flag.StringVar(&flagRunAddr, "a", "localhost:8080", "server listen address")
+	flag.Parse()
 }
