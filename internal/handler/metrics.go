@@ -13,7 +13,6 @@ import (
 
 //go:embed templates/index.html
 var templateFS embed.FS
-
 var indexTmp = template.Must(template.ParseFS(templateFS, "templates/index.html"))
 
 type MetricsStorage interface {
@@ -103,12 +102,10 @@ func (m *MetricsHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 func (m *MetricsHandler) GetMetricsList(w http.ResponseWriter, r *http.Request) {
 	metrics := m.metricHandler.GetAll()
 
-	w.Header().Set("Content-Type", "text/html, charset=utf-8")
-	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	err := indexTmp.Execute(w, metrics)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := indexTmp.Execute(w, metrics); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 }

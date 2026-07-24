@@ -51,7 +51,10 @@ func (m *MemStorage) GetGauge(name string) (float64, bool) {
 
 	val, ok := m.metrics[name]
 	if ok {
-		return *val.Value, true
+		if val.Value != nil && val.MType == models.Gauge {
+			return *val.Value, true
+		}
+		return 0, false
 	}
 
 	return 0, false
@@ -63,7 +66,10 @@ func (m *MemStorage) GetCounter(name string) (int64, bool) {
 
 	val, ok := m.metrics[name]
 	if ok {
-		return *val.Delta, true
+		if val.Delta != nil && val.MType == models.Counter {
+			return *val.Delta, true
+		}
+		return 0, false
 	}
 
 	return 0, false

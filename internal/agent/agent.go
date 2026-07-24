@@ -13,7 +13,7 @@ import (
 )
 
 type MemCollect struct {
-	mu             sync.RWMutex
+	mu             sync.Mutex
 	gauges         map[string]float64
 	counters       map[string]int64
 	baseURL        string
@@ -103,8 +103,8 @@ func (m *MemCollect) post(url string) error {
 }
 
 func (m *MemCollect) Send() {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	for name, value := range m.gauges {
 		if err := m.sendGauge(name, value); err != nil {
@@ -118,6 +118,8 @@ func (m *MemCollect) Send() {
 			log.Error().Err(err).Msgf("failed to send counter %s", name)
 			continue
 		}
+
+		m.counters[name] = 0
 	}
 }
 
