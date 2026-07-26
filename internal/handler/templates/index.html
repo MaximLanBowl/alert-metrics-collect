@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<head><title>Metrics</title></head>
+<body>
+<h1>Metrics</h1>
+<ul>
+    {{range .}}
+    <li>{{.ID}} ({{.MType}}): {{if eq .MType "gauge"}}{{.Value}}{{else}}{{.Delta}}{{end}}</li>
+    {{end}}
+</ul>
+</body>
+</html>
