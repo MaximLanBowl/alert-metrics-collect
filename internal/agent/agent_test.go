@@ -3,6 +3,7 @@ package agent
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
@@ -62,8 +63,10 @@ func TestCounterCapitalize(t *testing.T) {
 	}))
 	defer server.Close()
 
+	u, _ := url.Parse(server.URL)
+
 	m := NewMemCollect(config.Config{
-		Address:        "localhost:8080",
+		Address:        u.Host,
 		ReportInterval: 10,
 		PollInterval:   2,
 	})
