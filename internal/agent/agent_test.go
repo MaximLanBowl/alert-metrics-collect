@@ -10,7 +10,7 @@ import (
 )
 
 func TestMemCollect(t *testing.T) {
-	m := NewMemCollect(config.Config{
+	m := NewMemCollect(config.AgentConfig{
 		Address:        "localhost:8080",
 		ReportInterval: 10,
 		PollInterval:   2,
@@ -40,7 +40,7 @@ func TestMemCollect(t *testing.T) {
 }
 
 func TestPollCountIncrements(t *testing.T) {
-	m := NewMemCollect(config.Config{
+	m := NewMemCollect(config.AgentConfig{
 		Address:        "localhost:8080",
 		ReportInterval: 10,
 		PollInterval:   2,
@@ -65,7 +65,7 @@ func TestCounterCapitalize(t *testing.T) {
 
 	u, _ := url.Parse(server.URL)
 
-	m := NewMemCollect(config.Config{
+	m := NewMemCollect(config.AgentConfig{
 		Address:        u.Host,
 		ReportInterval: 10,
 		PollInterval:   2,

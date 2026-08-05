@@ -24,7 +24,7 @@ type MemCollect struct {
 	reportInterval time.Duration
 }
 
-func NewMemCollect(cfg config.Config) *MemCollect {
+func NewMemCollect(cfg config.AgentConfig) *MemCollect {
 	return &MemCollect{
 		gauges:   make(map[string]float64),
 		counters: make(map[string]int64),

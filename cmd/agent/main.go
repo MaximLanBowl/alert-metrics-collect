@@ -9,13 +9,13 @@ import (
 )
 
 func main() {
-	if err := Run(); err != nil {
+	if err := run(); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func Run() error {
-	cfg, err := config.Load()
+func run() error {
+	cfg, err := config.LoadAgent()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
