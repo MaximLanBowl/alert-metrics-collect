@@ -4,11 +4,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
+
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
 )
 
 func TestMemCollect(t *testing.T) {
-	m := NewMemCollect("http://localhost:8080", 10*time.Second, 2*time.Second)
+	m := NewMemCollect(config.Config{
+		Address:        "localhost:8080",
+		ReportInterval: 10,
+		PollInterval:   2,
+	})
 
 	m.collect()
 
@@ -34,7 +39,11 @@ func TestMemCollect(t *testing.T) {
 }
 
 func TestPollCountIncrements(t *testing.T) {
-	m := NewMemCollect("http://localhost:8080", 10*time.Second, 2*time.Second)
+	m := NewMemCollect(config.Config{
+		Address:        "localhost:8080",
+		ReportInterval: 10,
+		PollInterval:   2,
+	})
 
 	m.collect()
 	if got := m.counters["PollCount"]; got != 1 {
@@ -53,7 +62,11 @@ func TestCounterCapitalize(t *testing.T) {
 	}))
 	defer server.Close()
 
-	m := NewMemCollect(server.URL, 10*time.Second, 2*time.Second)
+	m := NewMemCollect(config.Config{
+		Address:        "localhost:8080",
+		ReportInterval: 10,
+		PollInterval:   2,
+	})
 
 	m.collect()
 	m.collect()

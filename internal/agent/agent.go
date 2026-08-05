@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"net/http"
 	"runtime"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -22,20 +24,16 @@ type MemCollect struct {
 	reportInterval time.Duration
 }
 
-func NewMemCollect(
-	baseURL string,
-	report,
-	poll time.Duration,
-) *MemCollect {
+func NewMemCollect(cfg config.Config) *MemCollect {
 	return &MemCollect{
 		gauges:   make(map[string]float64),
 		counters: make(map[string]int64),
-		baseURL:  baseURL,
+		baseURL:  "http://" + cfg.Address,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		reportInterval: report,
-		pollInterval:   poll,
+		reportInterval: time.Duration(cfg.ReportInterval) * time.Second,
+		pollInterval:   time.Duration(cfg.PollInterval) * time.Second,
 	}
 }
 
@@ -93,7 +91,12 @@ func (m *MemCollect) post(url string) error {
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer response.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			fmt.Printf("failed to close response body: %v", err)
+		}
+	}(response.Body)
 
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", response.StatusCode)
