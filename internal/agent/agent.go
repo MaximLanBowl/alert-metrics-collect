@@ -1,16 +1,18 @@
 package agent
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand/v2"
 	"net/http"
 	"runtime"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
+	models "github.com/MaximLanBowl/alert-metrics-collect/internal/model"
 	"github.com/rs/zerolog/log"
 )
 
@@ -77,29 +79,52 @@ func (m *MemCollect) collect() {
 }
 
 func (m *MemCollect) sendGauge(name string, value float64) error {
-	url := fmt.Sprintf(m.baseURL+"/update/gauge/%s/%s", name, strconv.FormatFloat(value, 'f', -1, 64))
-	return m.post(url)
+	metric := models.Metrics{
+		ID:    name,
+		MType: models.Gauge,
+		Value: &value,
+	}
+
+	return m.post(metric)
 }
 
 func (m *MemCollect) sendCounter(name string, delta int64) error {
-	url := fmt.Sprintf(m.baseURL+"/update/counter/%s/%d", name, delta)
-	return m.post(url)
+	metric := models.Metrics{
+		ID:    name,
+		MType: models.Counter,
+		Delta: &delta,
+	}
+
+	return m.post(metric)
 }
 
-func (m *MemCollect) post(url string) error {
-	response, err := m.client.Post(url, "text/plain", nil)
+func (m *MemCollect) post(metric models.Metrics) error {
+	body, err := json.Marshal(metric)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metric: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, m.baseURL+"/update", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	log.Info().RawJSON("request", body).Msg("Request body")
+
+	resp, err := m.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 	defer func(Body io.ReadCloser) {
 		err = Body.Close()
 		if err != nil {
-			fmt.Printf("failed to close response body: %v", err)
+			log.Error().Err(err).Msg("failed to close response body")
 		}
-	}(response.Body)
+	}(resp.Body)
 
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", response.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to send request: %s", resp.Status)
 	}
 
 	return nil

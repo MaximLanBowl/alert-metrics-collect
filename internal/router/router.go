@@ -13,10 +13,14 @@ func New(h *handler.MetricsHandler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(logger.WithLogging)
-
 	r.Use(middleware.Recoverer)
 
+	// POST
 	r.Post("/update/{type}/{name}/{value}", h.SetMetrics)
+	r.Post("/update", h.UpdateMetrics)
+	r.Post("/value", h.GetMetricsByValue)
+
+	// GET
 	r.Get("/value/{type}/{name}", h.GetMetrics)
 	r.Get("/", h.GetMetricsList)
 

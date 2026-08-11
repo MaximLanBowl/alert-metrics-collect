@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"sync"
 
 	models "github.com/MaximLanBowl/alert-metrics-collect/internal/model"
@@ -43,6 +44,34 @@ func (m *MemStorage) AddCounter(name string, delta int64) {
 		MType: models.Counter,
 		Delta: &delta,
 	}
+}
+
+func (m *MemStorage) UpdateMetrics(req models.Metrics) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	switch req.MType {
+	case models.Counter:
+		existing, ok := m.metrics[req.ID]
+		if ok && existing.Delta != nil && req.Delta != nil {
+			*req.Delta += *existing.Delta
+		}
+		m.metrics[req.ID] = req
+	case models.Gauge:
+		m.metrics[req.ID] = req
+	}
+}
+
+func (m *MemStorage) GetByValues(req models.Metrics) (models.Metrics, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	val, ok := m.metrics[req.ID]
+	if !ok {
+		return models.Metrics{}, errors.New("metric not found")
+	}
+
+	return val, nil
 }
 
 func (m *MemStorage) GetGauge(name string) (float64, bool) {

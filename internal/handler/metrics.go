@@ -2,6 +2,7 @@ package handler
 
 import (
 	"embed"
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -16,18 +17,28 @@ var templateFS embed.FS
 var indexTmp = template.Must(template.ParseFS(templateFS, "templates/index.html"))
 
 type MetricsStorage interface {
-	SetGauge(name string, value float64)
-	AddCounter(name string, delta int64)
+	MetricsReader
+	MetricsWriter
+}
+
+type MetricsReader interface {
 	GetGauge(name string) (float64, bool)
 	GetCounter(name string) (int64, bool)
 	GetAll() []models.Metrics
+	GetByValues(req models.Metrics) (models.Metrics, error)
+}
+
+type MetricsWriter interface {
+	SetGauge(name string, value float64)
+	AddCounter(name string, delta int64)
+	UpdateMetrics(req models.Metrics)
 }
 
 type MetricsHandler struct {
 	metricHandler MetricsStorage
 }
 
-func NewMetricsHandler(metricHandler MetricsStorage) *MetricsHandler {
+func NewMetrics(metricHandler MetricsStorage) *MetricsHandler {
 	return &MetricsHandler{
 		metricHandler: metricHandler,
 	}
@@ -65,6 +76,47 @@ func (m *MetricsHandler) SetMetrics(w http.ResponseWriter, r *http.Request) {
 
 	log.Info().Msgf("Metric %s set to %s", mname, mvalue)
 	w.WriteHeader(http.StatusOK)
+}
+
+func (m *MetricsHandler) UpdateMetrics(w http.ResponseWriter, r *http.Request) {
+	if !methodCheck(w, r) {
+		return
+	}
+
+	var req models.Metrics
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Warn().Err(err).Msg("Error decoding body")
+		http.Error(w, "failed to decode request body", http.StatusBadRequest)
+		return
+	}
+
+	if !typeCheck(req, w) {
+		return
+	}
+
+	if req.MType == models.Gauge && req.Value == nil {
+		log.Warn().Msg("Invalid request value gauge")
+		http.Error(w, "invalid request value gauge", http.StatusBadRequest)
+		return
+	}
+
+	if req.MType == models.Counter && req.Delta == nil {
+		log.Warn().Msg("Invalid request value counter")
+		http.Error(w, "invalid request value counter", http.StatusBadRequest)
+		return
+	}
+
+	m.metricHandler.UpdateMetrics(req)
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(req); err != nil {
+		log.Warn().Err(err).Msg("Error encoding body")
+		http.Error(w, "failed to encode request body", http.StatusInternalServerError)
+		return
+	}
+
+	log.Info().Msg("Metrics updated successfully")
 }
 
 func (m *MetricsHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
@@ -108,4 +160,58 @@ func (m *MetricsHandler) GetMetricsList(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+}
+
+func (m *MetricsHandler) GetMetricsByValue(w http.ResponseWriter, r *http.Request) {
+	if !methodCheck(w, r) {
+		return
+	}
+
+	var req models.Metrics
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Warn().Err(err).Msgf("Error decoding body")
+		http.Error(w, "failed to decode request body", http.StatusBadRequest)
+		return
+	}
+	log.Info().Msgf("Got metric by value request: %v", req)
+
+	if !typeCheck(req, w) {
+		return
+	}
+
+	data, err := m.metricHandler.GetByValues(req)
+	if err != nil {
+		log.Warn().Err(err).Msg("Error getting metric by value")
+		http.Error(w, "failed to get metric by value", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err = json.NewEncoder(w).Encode(data); err != nil {
+		log.Warn().Err(err).Msg("Error encoding body")
+		http.Error(w, "failed to encode request body", http.StatusInternalServerError)
+	}
+
+	log.Info().Msg("Got metric by value successfully")
+}
+
+func typeCheck(req models.Metrics, w http.ResponseWriter) bool {
+	if req.MType != models.Gauge && req.MType != models.Counter {
+		log.Warn().Msg("Invalid metric type")
+		http.Error(w, "invalid metric type", http.StatusBadRequest)
+		return false
+	}
+
+	return true
+}
+
+func methodCheck(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodPost {
+		log.Warn().Msg("Invalid method")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return false
+	}
+
+	return true
 }

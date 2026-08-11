@@ -25,7 +25,7 @@ func run() error {
 	}
 
 	storage := repository.NewMemStorage()
-	h := handler.NewMetricsHandler(storage)
+	h := handler.NewMetrics(storage)
 	r := router.New(h)
 
 	zlog.Info().Str("addr", cfg.Address).Msgf("Starting server")
