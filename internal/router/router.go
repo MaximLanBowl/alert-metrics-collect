@@ -14,6 +14,7 @@ func New(h *handler.MetricsHandler) http.Handler {
 
 	r.Use(logger.WithLogging)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.StripSlashes)
 
 	// POST
 	r.Post("/update/{type}/{name}/{value}", h.SetMetrics)
