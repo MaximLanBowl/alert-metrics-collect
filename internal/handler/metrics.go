@@ -173,7 +173,6 @@ func (m *MetricsHandler) GetMetricsByValue(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "failed to decode request body", http.StatusBadRequest)
 		return
 	}
-	log.Info().Msgf("Got metric by value request: %v", req)
 
 	if !typeCheck(req, w) {
 		return

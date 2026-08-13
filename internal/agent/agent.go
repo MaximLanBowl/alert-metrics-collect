@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -98,17 +99,41 @@ func (m *MemCollect) sendCounter(name string, delta int64) error {
 	return m.post(metric)
 }
 
+func compress(data []byte) (*bytes.Buffer, error) {
+	var buf bytes.Buffer
+
+	wr := gzip.NewWriter(&buf)
+	if _, err := wr.Write(data); err != nil {
+		return nil, fmt.Errorf("failed to write to compressor: %w", err)
+	}
+
+	err := wr.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to close compressor: %w", err)
+	}
+
+	return &buf, nil
+}
+
 func (m *MemCollect) post(metric models.Metrics) error {
 	body, err := json.Marshal(metric)
 	if err != nil {
 		return fmt.Errorf("failed to marshal metric: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, m.baseURL+"/update", bytes.NewReader(body))
+	compressed, err := compress(body)
+	if err != nil {
+		return fmt.Errorf("failed to compress request body: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, m.baseURL+"/update", compressed)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
+
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Accept-Encoding", "gzip")
 
 	log.Info().RawJSON("request", body).Msg("Request body")
 
