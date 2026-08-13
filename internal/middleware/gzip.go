@@ -45,7 +45,11 @@ func (g *gzipWriter) Write(b []byte) (int, error) {
 }
 
 func (g *gzipWriter) Close() error {
-	return g.gwr.Close()
+	if g.validCompress {
+		return g.gwr.Close()
+	}
+
+	return nil
 }
 
 type gzipReader struct {

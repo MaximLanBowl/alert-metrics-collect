@@ -13,13 +13,12 @@ import (
 func New(h *handler.MetricsHandler) http.Handler {
 	r := chi.NewRouter()
 
-	// Custom middleware
-	r.Use(logger.WithLogging)
-	r.Use(gzipmdv.Compressor)
-
-	// Default middleware chi
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.StripSlashes)
+
+	// Custom
+	r.Use(gzipmdv.Compressor)
+	r.Use(logger.WithLogging)
 
 	// POST
 	r.Post("/update/{type}/{name}/{value}", h.SetMetrics)
