@@ -11,6 +11,7 @@ type gzipWriter struct {
 	http.ResponseWriter
 	gwr           *gzip.Writer
 	validCompress bool
+	headerWritten bool
 }
 
 func newGzipWriter(w http.ResponseWriter) *gzipWriter {
@@ -25,6 +26,11 @@ func (g *gzipWriter) Header() http.Header {
 }
 
 func (g *gzipWriter) WriteHeader(statusCode int) {
+	if g.headerWritten {
+		return
+	}
+	g.headerWritten = true
+	
 	ct := g.ResponseWriter.Header().Get("Content-Type")
 	compressible := strings.Contains(ct, "text/html") || strings.Contains(ct, "application/json")
 
@@ -37,6 +43,10 @@ func (g *gzipWriter) WriteHeader(statusCode int) {
 }
 
 func (g *gzipWriter) Write(b []byte) (int, error) {
+	if !g.headerWritten {
+		g.WriteHeader(http.StatusOK)
+	}
+
 	if g.validCompress {
 		return g.gwr.Write(b)
 	}
