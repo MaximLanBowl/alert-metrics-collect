@@ -3,7 +3,9 @@ package handler
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"html/template"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -76,6 +78,11 @@ func (m *MetricsHandler) Restore(consumer MetricsConsumer) error {
 
 	metrics, err := consumer.ReadMetrics()
 	if err != nil {
+		if errors.Is(err, io.EOF) {
+			log.Info().Msg("Metrics file is empty, no metrics to restore")
+			return nil
+		}
+
 		log.Warn().Err(err).Msg("Error reading metrics")
 		return err
 	}
