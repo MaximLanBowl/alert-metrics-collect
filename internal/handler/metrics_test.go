@@ -5,15 +5,35 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
-	models "github.com/MaximLanBowl/alert-metrics-collect/internal/model"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
+	models "github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/repository"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 )
 
 const baseURL = "http://localhost:8080"
+
+func newTestProducer(t *testing.T) *repository.Producer {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "metrics.json")
+	p, err := repository.NewProducer(path)
+	if err != nil {
+		t.Fatalf("failed to create producer: %v", err)
+	}
+	t.Cleanup(func() { p.Close() })
+
+	return p
+}
+
+func newTestHandler(t *testing.T, storage *repository.MemStorage, cfg config.ServerConfig) *MetricsHandler {
+	t.Helper()
+	return NewMetrics(storage, newTestProducer(t), cfg)
+}
 
 func TestMetricsHandler_SetMetrics(t *testing.T) {
 	tests := []struct {
@@ -62,7 +82,8 @@ func TestMetricsHandler_SetMetrics(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			storage := repository.NewMemStorage()
-			h := NewMetrics(storage)
+			cfg := config.ServerConfig{StoreInterval: 300}
+			h := newTestHandler(t, storage, cfg)
 
 			req := httptest.NewRequest(tt.method, tt.url, nil)
 			w := httptest.NewRecorder()
@@ -132,7 +153,8 @@ func TestMetricsHandler_GetMetrics(t *testing.T) {
 			storage := repository.NewMemStorage()
 			tt.setVal(storage)
 
-			h := NewMetrics(storage)
+			cfg := config.ServerConfig{StoreInterval: 300}
+			h := newTestHandler(t, storage, cfg)
 
 			req := httptest.NewRequest(tt.method, tt.url, nil)
 			w := httptest.NewRecorder()
@@ -171,7 +193,8 @@ func TestMetricsHandler_GetMetricsList(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			storage := repository.NewMemStorage()
-			h := NewMetrics(storage)
+			cfg := config.ServerConfig{StoreInterval: 300}
+			h := newTestHandler(t, storage, cfg)
 
 			req := httptest.NewRequest(tt.method, tt.url, nil)
 			w := httptest.NewRecorder()
@@ -252,7 +275,8 @@ func TestMetricsHandler_UpdateMetrics(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			storage := repository.NewMemStorage()
-			h := NewMetrics(storage)
+			cfg := config.ServerConfig{StoreInterval: 300}
+			h := newTestHandler(t, storage, cfg)
 
 			body, err := json.Marshal(tt.req)
 			if err != nil {

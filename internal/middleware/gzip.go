@@ -30,7 +30,7 @@ func (g *gzipWriter) WriteHeader(statusCode int) {
 		return
 	}
 	g.headerWritten = true
-	
+
 	ct := g.ResponseWriter.Header().Get("Content-Type")
 	compressible := strings.Contains(ct, "text/html") || strings.Contains(ct, "application/json")
 

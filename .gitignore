@@ -25,3 +25,5 @@ vendor/
 # IDEs directories
 .idea
 .vscode
+
+runtime_metrics.json

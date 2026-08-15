@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
-	models "github.com/MaximLanBowl/alert-metrics-collect/internal/model"
+	models "github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 	"github.com/rs/zerolog/log"
 )
 

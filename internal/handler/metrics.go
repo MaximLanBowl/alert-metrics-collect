@@ -6,8 +6,10 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"time"
 
-	models "github.com/MaximLanBowl/alert-metrics-collect/internal/model"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
+	models "github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 )
@@ -19,6 +21,7 @@ var indexTmp = template.Must(template.ParseFS(templateFS, "templates/index.html"
 type MetricsStorage interface {
 	MetricsReader
 	MetricsWriter
+	MetricsRestore
 }
 
 type MetricsReader interface {
@@ -34,13 +37,79 @@ type MetricsWriter interface {
 	UpdateMetrics(req models.Metrics)
 }
 
-type MetricsHandler struct {
-	metricHandler MetricsStorage
+type MetricsRestore interface {
+	Restore(metrics []models.Metrics) error
 }
 
-func NewMetrics(metricHandler MetricsStorage) *MetricsHandler {
+type MetricsProducer interface {
+	WriteMetrics(metrics []models.Metrics) error
+	Close() error
+}
+
+type MetricsConsumer interface {
+	ReadMetrics() ([]models.Metrics, error)
+	Close() error
+}
+
+type MetricsHandler struct {
+	metricHandler MetricsStorage
+	producer      MetricsProducer
+	cfg           config.ServerConfig
+}
+
+func NewMetrics(metricHandler MetricsStorage, producer MetricsProducer, cfg config.ServerConfig) *MetricsHandler {
 	return &MetricsHandler{
 		metricHandler: metricHandler,
+		producer:      producer,
+		cfg:           cfg,
+	}
+}
+
+func (m *MetricsHandler) CloseMetricsFile() error {
+	return m.producer.Close()
+}
+
+func (m *MetricsHandler) Restore(consumer MetricsConsumer) error {
+	if !m.cfg.Restore {
+		return nil
+	}
+
+	metrics, err := consumer.ReadMetrics()
+	if err != nil {
+		log.Warn().Err(err).Msg("Error reading metrics")
+		return err
+	}
+
+	m.metricHandler.Restore(metrics)
+
+	return nil
+}
+
+func (m *MetricsHandler) StartAutoSave() {
+	if m.cfg.StoreInterval <= 0 {
+		return
+	}
+
+	go func() {
+		ticker := time.NewTicker(time.Duration(m.cfg.StoreInterval) * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			if err := m.producer.WriteMetrics(m.metricHandler.GetAll()); err != nil {
+				log.Warn().Err(err).Msg("failed to write metrics")
+			}
+		}
+	}()
+}
+
+func (m *MetricsHandler) syncSave() {
+	if m.cfg.StoreInterval != 0 {
+		return
+	}
+
+	if err := m.producer.WriteMetrics(m.metricHandler.GetAll()); err != nil {
+		log.Warn().Err(err).Msg("failed to write metrics")
+		return
 	}
 }
 
@@ -73,6 +142,8 @@ func (m *MetricsHandler) SetMetrics(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid metric type", http.StatusBadRequest)
 		return
 	}
+
+	m.syncSave()
 
 	log.Info().Msgf("Metric %s set to %s", mname, mvalue)
 	w.WriteHeader(http.StatusOK)
@@ -107,6 +178,7 @@ func (m *MetricsHandler) UpdateMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m.metricHandler.UpdateMetrics(req)
+	m.syncSave()
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -188,8 +260,8 @@ func (m *MetricsHandler) GetMetricsByValue(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 
 	if err = json.NewEncoder(w).Encode(data); err != nil {
-		log.Warn().Err(err).Msg("Error encoding body")
 		http.Error(w, "failed to encode request body", http.StatusInternalServerError)
+		return
 	}
 
 	log.Info().Msg("Got metric by value successfully")

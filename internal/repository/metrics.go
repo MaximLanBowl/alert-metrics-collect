@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	models "github.com/MaximLanBowl/alert-metrics-collect/internal/model"
+	models "github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 )
 
 type MemStorage struct {
@@ -114,4 +114,12 @@ func (m *MemStorage) GetAll() []models.Metrics {
 	}
 
 	return values
+}
+
+func (m *MemStorage) Restore(metrics []models.Metrics) error {
+	for _, mt := range metrics {
+		m.UpdateMetrics(mt)
+	}
+
+	return nil
 }
