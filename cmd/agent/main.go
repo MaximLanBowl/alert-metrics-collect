@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -21,8 +20,6 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-
-	flag.Parse()
 
 	collector := agent.NewMemCollect(cfg)
 	collector.Run()
