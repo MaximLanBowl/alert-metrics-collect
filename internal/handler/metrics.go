@@ -247,7 +247,7 @@ func (m *MetricsHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (m *MetricsHandler) GetMetricsList(w http.ResponseWriter) {
+func (m *MetricsHandler) GetMetricsList(w http.ResponseWriter, r *http.Request) {
 	metrics := m.metricHandler.GetAll()
 
 	var buf bytes.Buffer
