@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -87,7 +88,10 @@ func (m *MetricsHandler) Restore(consumer MetricsConsumer) error {
 		return err
 	}
 
-	m.metricHandler.Restore(metrics)
+	if err = m.metricHandler.Restore(metrics); err != nil {
+		log.Warn().Err(err).Msg("Error restoring metrics")
+		return err
+	}
 
 	return nil
 }
@@ -161,10 +165,17 @@ func (m *MetricsHandler) UpdateMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Warn().Err(err).Msg("Error reading body")
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+		return
+	}
+
 	var req models.Metrics
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Warn().Err(err).Msg("Error decoding body")
-		http.Error(w, "failed to decode request body", http.StatusBadRequest)
+	if err = json.Unmarshal(body, &req); err != nil {
+		log.Warn().Err(err).Msg("Error unmarshaling body")
+		http.Error(w, "failed to unmarshal request body", http.StatusBadRequest)
 		return
 	}
 
@@ -187,11 +198,17 @@ func (m *MetricsHandler) UpdateMetrics(w http.ResponseWriter, r *http.Request) {
 	m.metricHandler.UpdateMetrics(req)
 	m.syncSave()
 
-	w.Header().Set("Content-Type", "application/json")
+	resp, err := json.Marshal(req)
+	if err != nil {
+		log.Warn().Err(err).Msg("Error marshaling body")
+		http.Error(w, "failed to marshal request body", http.StatusInternalServerError)
+		return
+	}
 
-	if err := json.NewEncoder(w).Encode(req); err != nil {
-		log.Warn().Err(err).Msg("Error encoding body")
-		http.Error(w, "failed to encode request body", http.StatusInternalServerError)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if _, err = w.Write(resp); err != nil {
+		log.Warn().Err(err).Msg("Error writing response")
 		return
 	}
 
@@ -230,13 +247,19 @@ func (m *MetricsHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (m *MetricsHandler) GetMetricsList(w http.ResponseWriter, r *http.Request) {
+func (m *MetricsHandler) GetMetricsList(w http.ResponseWriter) {
 	metrics := m.metricHandler.GetAll()
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	if err := indexTmp.Execute(w, metrics); err != nil {
+	var buf bytes.Buffer
+	if err := indexTmp.Execute(&buf, metrics); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		log.Warn().Err(err).Msg("Error writing response")
 		return
 	}
 }
@@ -246,10 +269,17 @@ func (m *MetricsHandler) GetMetricsByValue(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Warn().Err(err).Msg("Error reading body")
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+		return
+	}
+
 	var req models.Metrics
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Warn().Err(err).Msgf("Error decoding body")
-		http.Error(w, "failed to decode request body", http.StatusBadRequest)
+	if err = json.Unmarshal(body, &req); err != nil {
+		log.Warn().Err(err).Msg("Error unmarshaling body")
+		http.Error(w, "failed to unmarshal request body", http.StatusBadRequest)
 		return
 	}
 
@@ -264,10 +294,17 @@ func (m *MetricsHandler) GetMetricsByValue(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	resp, err := json.Marshal(data)
+	if err != nil {
+		log.Warn().Err(err).Msg("Error marshaling response")
+		http.Error(w, "failed to marshal response", http.StatusInternalServerError)
+		return
+	}
 
-	if err = json.NewEncoder(w).Encode(data); err != nil {
-		http.Error(w, "failed to encode request body", http.StatusInternalServerError)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if _, err = w.Write(resp); err != nil {
+		log.Warn().Err(err).Msg("Error writing response")
 		return
 	}
 

@@ -46,10 +46,7 @@ func (m *MemStorage) AddCounter(name string, delta int64) {
 	}
 }
 
-func (m *MemStorage) UpdateMetrics(req models.Metrics) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
+func (m *MemStorage) updateMetricsLocked(req models.Metrics) {
 	switch req.MType {
 	case models.Counter:
 		existing, ok := m.metrics[req.ID]
@@ -60,6 +57,13 @@ func (m *MemStorage) UpdateMetrics(req models.Metrics) {
 	case models.Gauge:
 		m.metrics[req.ID] = req
 	}
+}
+
+func (m *MemStorage) UpdateMetrics(req models.Metrics) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.updateMetricsLocked(req)
 }
 
 func (m *MemStorage) GetByValues(req models.Metrics) (models.Metrics, error) {
@@ -117,8 +121,11 @@ func (m *MemStorage) GetAll() []models.Metrics {
 }
 
 func (m *MemStorage) Restore(metrics []models.Metrics) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	for _, mt := range metrics {
-		m.UpdateMetrics(mt)
+		m.updateMetricsLocked(mt)
 	}
 
 	return nil

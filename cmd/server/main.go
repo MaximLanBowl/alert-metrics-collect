@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/handler"
@@ -19,7 +20,7 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.LoadServer()
+	cfg, err := config.LoadServer(os.Args[1:])
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

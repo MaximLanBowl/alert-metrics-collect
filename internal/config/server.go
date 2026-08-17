@@ -14,13 +14,17 @@ type ServerConfig struct {
 	Restore         bool   `env:"RESTORE"`
 }
 
-func LoadServer() (ServerConfig, error) {
-	addr := flag.String("a", "localhost:8080", "server listen address")
-	storeInterval := flag.Int("i", 300, "interval to store data")
-	filePath := flag.String("f", "runtime_metrics.json", "file for runtime metrics")
-	restore := flag.Bool("r", false, "restore data from file")
+func LoadServer(args []string) (ServerConfig, error) {
+	fs := flag.NewFlagSet("server", flag.ContinueOnError)
 
-	flag.Parse()
+	addr := fs.String("a", "localhost:8080", "server listen address")
+	storeInterval := fs.Int("i", 300, "interval to store data")
+	filePath := fs.String("f", "runtime_metrics.json", "file for runtime metrics")
+	restore := fs.Bool("r", false, "restore data from file")
+
+	if err := fs.Parse(args); err != nil {
+		return ServerConfig{}, fmt.Errorf("failed to parse flags: %w", err)
+	}
 
 	cfg := ServerConfig{
 		Address:         *addr,
