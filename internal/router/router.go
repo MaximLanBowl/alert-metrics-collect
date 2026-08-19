@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/handler"
+	gzipmdv "github.com/MaximLanBowl/alert-metrics-collect/internal/middleware"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/middleware/logger"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -11,10 +13,19 @@ import (
 func New(h *handler.MetricsHandler) http.Handler {
 	r := chi.NewRouter()
 
-	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.StripSlashes)
 
+	// Custom
+	r.Use(gzipmdv.Compressor)
+	r.Use(logger.WithLogging)
+
+	// POST
 	r.Post("/update/{type}/{name}/{value}", h.SetMetrics)
+	r.Post("/update", h.UpdateMetrics)
+	r.Post("/value", h.GetMetricsByValue)
+
+	// GET
 	r.Get("/value/{type}/{name}", h.GetMetrics)
 	r.Get("/", h.GetMetricsList)
 

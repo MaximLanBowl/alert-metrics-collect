@@ -1,9 +1,10 @@
 package repository
 
 import (
+	"errors"
 	"sync"
 
-	models "github.com/MaximLanBowl/alert-metrics-collect/internal/model"
+	models "github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 )
 
 type MemStorage struct {
@@ -43,6 +44,38 @@ func (m *MemStorage) AddCounter(name string, delta int64) {
 		MType: models.Counter,
 		Delta: &delta,
 	}
+}
+
+func (m *MemStorage) updateMetricsLocked(req models.Metrics) {
+	switch req.MType {
+	case models.Counter:
+		existing, ok := m.metrics[req.ID]
+		if ok && existing.Delta != nil && req.Delta != nil {
+			*req.Delta += *existing.Delta
+		}
+		m.metrics[req.ID] = req
+	case models.Gauge:
+		m.metrics[req.ID] = req
+	}
+}
+
+func (m *MemStorage) UpdateMetrics(req models.Metrics) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.updateMetricsLocked(req)
+}
+
+func (m *MemStorage) GetByValues(req models.Metrics) (models.Metrics, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	val, ok := m.metrics[req.ID]
+	if !ok {
+		return models.Metrics{}, errors.New("metric not found")
+	}
+
+	return val, nil
 }
 
 func (m *MemStorage) GetGauge(name string) (float64, bool) {
@@ -85,4 +118,15 @@ func (m *MemStorage) GetAll() []models.Metrics {
 	}
 
 	return values
+}
+
+func (m *MemStorage) Restore(metrics []models.Metrics) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, mt := range metrics {
+		m.updateMetricsLocked(mt)
+	}
+
+	return nil
 }

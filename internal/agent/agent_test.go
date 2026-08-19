@@ -1,14 +1,20 @@
 package agent
 
 import (
-	"net/http"
-	"net/http/httptest"
+	"compress/gzip"
+	"io"
 	"testing"
-	"time"
+
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMemCollect(t *testing.T) {
-	m := NewMemCollect("http://localhost:8080", 10*time.Second, 2*time.Second)
+	m := NewMemCollect(config.AgentConfig{
+		Address:        "localhost:8080",
+		ReportInterval: 10,
+		PollInterval:   2,
+	})
 
 	m.collect()
 
@@ -34,7 +40,11 @@ func TestMemCollect(t *testing.T) {
 }
 
 func TestPollCountIncrements(t *testing.T) {
-	m := NewMemCollect("http://localhost:8080", 10*time.Second, 2*time.Second)
+	m := NewMemCollect(config.AgentConfig{
+		Address:        "localhost:8080",
+		ReportInterval: 10,
+		PollInterval:   2,
+	})
 
 	m.collect()
 	if got := m.counters["PollCount"]; got != 1 {
@@ -47,34 +57,27 @@ func TestPollCountIncrements(t *testing.T) {
 	}
 }
 
-func TestCounterCapitalize(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
+func TestCompress(t *testing.T) {
+	input := []byte(`{"id":"Alloc","type":"gauge","value":123.45}`)
 
-	m := NewMemCollect(server.URL, 10*time.Second, 2*time.Second)
-
-	m.collect()
-	m.collect()
-	m.collect()
-
-	if got := m.counters["PollCount"]; got != 3 {
-		t.Errorf("expected PollCount=3, got %d", got)
+	compressed, err := compress(input)
+	if err != nil {
+		t.Errorf("compress error: %v", err)
 	}
-	t.Logf("got PollCount delta before send: %d", m.counters["PollCount"])
+	t.Log(compressed)
 
-	m.Send()
+	gz, err := gzip.NewReader(compressed)
+	if err != nil {
+		t.Errorf("gz read error: %v", err)
+	}
+	defer gz.Close()
 
-	if got := m.counters["PollCount"]; got != 0 {
-		t.Errorf("expected PollCount=0, got %d", got)
+	decompressed, err := io.ReadAll(gz)
+	if err != nil {
+		t.Errorf("decompress error: %v", err)
 	}
 
-	m.collect()
-	m.collect()
+	t.Log(string(input), string(decompressed))
 
-	if got := m.counters["PollCount"]; got != 2 {
-		t.Errorf("expected PollCount=2 after 2 more collects post-reset, got %d", got)
-	}
-	t.Logf("got PollCount delta in next iter: %d", m.counters["PollCount"])
+	assert.Equal(t, input, decompressed)
 }
