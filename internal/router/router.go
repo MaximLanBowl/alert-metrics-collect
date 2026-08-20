@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-func New(h *handler.Handlers) http.Handler {
+func New(h *handler.MetricsHandler) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.Recoverer)
@@ -21,14 +21,13 @@ func New(h *handler.Handlers) http.Handler {
 	r.Use(logger.WithLogging)
 
 	// POST
-	r.Post("/update/{type}/{name}/{value}", h.Metrics.SetMetrics)
-	r.Post("/update", h.Metrics.UpdateMetrics)
-	r.Post("/value", h.Metrics.GetMetricsByValue)
+	r.Post("/update/{type}/{name}/{value}", h.SetMetrics)
+	r.Post("/update", h.UpdateMetrics)
+	r.Post("/value", h.GetMetricsByValue)
 
 	// GET
-	r.Get("/ping", h.Ping.PingDatabase)
-	r.Get("/value/{type}/{name}", h.Metrics.GetMetrics)
-	r.Get("/", h.Metrics.GetMetricsList)
+	r.Get("/value/{type}/{name}", h.GetMetrics)
+	r.Get("/", h.GetMetricsList)
 
 	return r
 }
