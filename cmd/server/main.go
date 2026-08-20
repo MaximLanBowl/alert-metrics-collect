@@ -31,11 +31,16 @@ func run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	connPool, err := db.Init(cfg.Postgres)
-	if err != nil {
-		return fmt.Errorf("failed to load db: %w", err)
+	var ping handler.Pinger
+	if cfg.Postgres.DatabaseDSN != "" {
+		connPool, err := db.Init(cfg.Postgres)
+		if err != nil {
+			zlog.Error().Err(err).Msg("db unavailable, /ping will return 500")
+		} else {
+			defer connPool.Close()
+			ping = connPool
+		}
 	}
-	defer connPool.Close()
 
 	storage := repository.NewMemStorage()
 
@@ -46,7 +51,7 @@ func run() error {
 
 	h := &handler.Handlers{
 		Metrics: handler.NewMetrics(storage, producer, cfg.Server),
-		Ping:    handler.NewPingDB(connPool),
+		Ping:    handler.NewPingDB(ping),
 	}
 	defer h.Metrics.CloseMetricsFile()
 

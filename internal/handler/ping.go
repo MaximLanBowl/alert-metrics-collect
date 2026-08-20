@@ -24,6 +24,12 @@ func NewPingDB(connPool Pinger) *PingDBHandler {
 }
 
 func (p *PingDBHandler) PingDatabase(w http.ResponseWriter, r *http.Request) {
+	if p.connPool == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Error().Msg("Database connection pool is not initialized")
+		return
+	}
+
 	if err := p.connPool.Ping(r.Context()); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Error().Err(err).Msg("Failed to ping database")
