@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/db"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/handler"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/repository"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/router"
@@ -20,42 +21,56 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.LoadServer(os.Args[1:])
+	flags, err := config.ParseFlags(os.Args[1:])
+	if err != nil {
+		return fmt.Errorf("failed to parse flags: %w", err)
+	}
+
+	cfg, err := config.Load(*flags)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
+	connPool, err := db.Init(cfg.Postgres)
+	if err != nil {
+		return fmt.Errorf("failed to load db: %w", err)
+	}
+	defer connPool.Close()
+
 	storage := repository.NewMemStorage()
 
-	producer, err := repository.NewProducer(cfg.FileStoragePath)
+	producer, err := repository.NewProducer(cfg.Server.FileStoragePath)
 	if err != nil {
 		return fmt.Errorf("failed to create producer: %w", err)
 	}
 
-	h := handler.NewMetrics(storage, producer, cfg)
-	defer h.CloseMetricsFile()
+	h := &handler.Handlers{
+		Metrics: handler.NewMetrics(storage, producer, cfg.Server),
+		Ping:    handler.NewPingDB(connPool),
+	}
+	defer h.Metrics.CloseMetricsFile()
 
-	if cfg.Restore {
-		zlog.Info().Msgf("Restoring metrics from file %s", cfg.FileStoragePath)
-		consumer, err := repository.NewConsumer(cfg.FileStoragePath)
+	if cfg.Server.Restore {
+		zlog.Info().Msgf("Restoring metrics from file %s", cfg.Server.FileStoragePath)
+		consumer, err := repository.NewConsumer(cfg.Server.FileStoragePath)
 		if err != nil {
 			zlog.Error().Err(err).Msg("Failed to create consumer")
 			return fmt.Errorf("failed to create consumer: %w", err)
 		}
 		defer consumer.Close()
 
-		if err = h.Restore(consumer); err != nil {
+		if err = h.Metrics.Restore(consumer); err != nil {
 			zlog.Error().Err(err).Msg("Failed to restore metrics")
 			return fmt.Errorf("failed to restore metrics: %w", err)
 		}
 	}
 
-	h.StartAutoSave()
+	h.Metrics.StartAutoSave()
 
 	r := router.New(h)
 
-	zlog.Info().Str("addr", cfg.Address).Msgf("Starting server")
-	if err = http.ListenAndServe(cfg.Address, r); err != nil {
+	zlog.Info().Str("addr", cfg.Server.Address).Msgf("Starting server")
+	if err = http.ListenAndServe(cfg.Server.Address, r); err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
 	}
 	zlog.Info().Msg("Server stopped")
