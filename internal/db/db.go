@@ -10,10 +10,6 @@ import (
 )
 
 func Init(cfg config.PostgresConfig) (*pgxpool.Pool, error) {
-	if cfg.DatabaseDSN == "" {
-		return nil, fmt.Errorf("database DSN is empty (set -d flag or DATABASE_DSN env)")
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 
