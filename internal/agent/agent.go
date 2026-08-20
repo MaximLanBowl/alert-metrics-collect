@@ -1,14 +1,19 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"net/http"
 	"runtime"
-	"strconv"
 	"sync"
 	"time"
 
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
+	models "github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 	"github.com/rs/zerolog/log"
 )
 
@@ -22,20 +27,16 @@ type MemCollect struct {
 	reportInterval time.Duration
 }
 
-func NewMemCollect(
-	baseURL string,
-	report,
-	poll time.Duration,
-) *MemCollect {
+func NewMemCollect(cfg config.AgentConfig) *MemCollect {
 	return &MemCollect{
 		gauges:   make(map[string]float64),
 		counters: make(map[string]int64),
-		baseURL:  baseURL,
+		baseURL:  "http://" + cfg.Address,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		reportInterval: report,
-		pollInterval:   poll,
+		reportInterval: time.Duration(cfg.ReportInterval) * time.Second,
+		pollInterval:   time.Duration(cfg.PollInterval) * time.Second,
 	}
 }
 
@@ -79,24 +80,76 @@ func (m *MemCollect) collect() {
 }
 
 func (m *MemCollect) sendGauge(name string, value float64) error {
-	url := fmt.Sprintf(m.baseURL+"/update/gauge/%s/%s", name, strconv.FormatFloat(value, 'f', -1, 64))
-	return m.post(url)
+	metric := models.Metrics{
+		ID:    name,
+		MType: models.Gauge,
+		Value: &value,
+	}
+
+	return m.post(metric)
 }
 
 func (m *MemCollect) sendCounter(name string, delta int64) error {
-	url := fmt.Sprintf(m.baseURL+"/update/counter/%s/%d", name, delta)
-	return m.post(url)
+	metric := models.Metrics{
+		ID:    name,
+		MType: models.Counter,
+		Delta: &delta,
+	}
+
+	return m.post(metric)
 }
 
-func (m *MemCollect) post(url string) error {
-	response, err := m.client.Post(url, "text/plain", nil)
+func compress(data []byte) (*bytes.Buffer, error) {
+	var buf bytes.Buffer
+
+	wr := gzip.NewWriter(&buf)
+	if _, err := wr.Write(data); err != nil {
+		return nil, fmt.Errorf("failed to write to compressor: %w", err)
+	}
+
+	err := wr.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to close compressor: %w", err)
+	}
+
+	return &buf, nil
+}
+
+func (m *MemCollect) post(metric models.Metrics) error {
+	body, err := json.Marshal(metric)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metric: %w", err)
+	}
+
+	compressed, err := compress(body)
+	if err != nil {
+		return fmt.Errorf("failed to compress request body: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, m.baseURL+"/update", compressed)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	log.Info().RawJSON("request", body).Msg("Request body")
+
+	resp, err := m.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer response.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			log.Error().Err(err).Msg("failed to close response body")
+		}
+	}(resp.Body)
 
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", response.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to send request: %s", resp.Status)
 	}
 
 	return nil
