@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -19,7 +20,7 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
-func (m *MemStorage) SetGauge(name string, value float64) {
+func (m *MemStorage) SetGauge(_ context.Context, name string, value float64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -28,9 +29,11 @@ func (m *MemStorage) SetGauge(name string, value float64) {
 		MType: models.Gauge,
 		Value: &value,
 	}
+
+	return nil
 }
 
-func (m *MemStorage) AddCounter(name string, delta int64) {
+func (m *MemStorage) SetCounter(_ context.Context, name string, delta int64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -44,6 +47,8 @@ func (m *MemStorage) AddCounter(name string, delta int64) {
 		MType: models.Counter,
 		Delta: &delta,
 	}
+
+	return nil
 }
 
 func (m *MemStorage) updateMetricsLocked(req models.Metrics) {
@@ -59,14 +64,16 @@ func (m *MemStorage) updateMetricsLocked(req models.Metrics) {
 	}
 }
 
-func (m *MemStorage) UpdateMetrics(req models.Metrics) {
+func (m *MemStorage) UpdateMetrics(_ context.Context, req models.Metrics) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	m.updateMetricsLocked(req)
+
+	return nil
 }
 
-func (m *MemStorage) GetByValues(req models.Metrics) (models.Metrics, error) {
+func (m *MemStorage) GetByValues(_ context.Context, req models.Metrics) (models.Metrics, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -78,7 +85,7 @@ func (m *MemStorage) GetByValues(req models.Metrics) (models.Metrics, error) {
 	return val, nil
 }
 
-func (m *MemStorage) GetGauge(name string) (float64, bool) {
+func (m *MemStorage) GetGauge(_ context.Context, name string) (float64, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -93,7 +100,7 @@ func (m *MemStorage) GetGauge(name string) (float64, bool) {
 	return 0, false
 }
 
-func (m *MemStorage) GetCounter(name string) (int64, bool) {
+func (m *MemStorage) GetCounter(_ context.Context, name string) (int64, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -108,7 +115,7 @@ func (m *MemStorage) GetCounter(name string) (int64, bool) {
 	return 0, false
 }
 
-func (m *MemStorage) GetAll() []models.Metrics {
+func (m *MemStorage) GetAll(_ context.Context, _ models.MetricsFilter) ([]models.Metrics, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -117,7 +124,7 @@ func (m *MemStorage) GetAll() []models.Metrics {
 		values = append(values, v)
 	}
 
-	return values
+	return values, nil
 }
 
 func (m *MemStorage) Restore(metrics []models.Metrics) error {

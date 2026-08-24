@@ -113,7 +113,7 @@ func TestMetricsHandler_GetMetrics(t *testing.T) {
 			url:    baseURL + "/value/counter/PollCount",
 			status: http.StatusOK,
 			setVal: func(storage *repository.MemStorage) {
-				storage.AddCounter("PollCount", 10)
+				storage.SetCounter(t.Context(), "PollCount", 10)
 			},
 		},
 		{
@@ -122,7 +122,7 @@ func TestMetricsHandler_GetMetrics(t *testing.T) {
 			url:    baseURL + "/value/gauge/Lookups",
 			status: http.StatusOK,
 			setVal: func(storage *repository.MemStorage) {
-				storage.SetGauge("Lookups", 14345)
+				storage.SetGauge(t.Context(), "Lookups", 14345)
 			},
 		},
 		{

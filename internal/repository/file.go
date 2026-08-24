@@ -30,11 +30,16 @@ func (p *Producer) WriteMetrics(metrics []models.Metrics) error {
 	if err := p.file.Truncate(0); err != nil {
 		return fmt.Errorf("failed to truncate file: %w", err)
 	}
+
 	if _, err := p.file.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("failed to seek file: %w", err)
 	}
 
-	return p.encoder.Encode(metrics)
+	if err := p.encoder.Encode(metrics); err != nil {
+		return fmt.Errorf("failed to encode metrics: %w", err)
+	}
+
+	return nil
 }
 
 func (p *Producer) Close() error {
@@ -59,13 +64,13 @@ func NewConsumer(filename string) (*Consumer, error) {
 }
 
 func (c *Consumer) ReadMetrics() ([]models.Metrics, error) {
-	var data []models.Metrics
+	var metrics []models.Metrics
 
-	if err := c.decoder.Decode(&data); err != nil {
+	if err := c.decoder.Decode(&metrics); err != nil {
 		return nil, fmt.Errorf("failed to decode metrics: %w", err)
 	}
 
-	return data, nil
+	return metrics, nil
 }
 
 func (c *Consumer) Close() error {
