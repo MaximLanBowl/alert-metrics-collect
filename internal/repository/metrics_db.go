@@ -103,7 +103,7 @@ func (m *MetricsDB) UpdateMetrics(ctx context.Context, req models.Metrics) error
 			return fmt.Errorf("failed to set counter: %w", err)
 		}
 	default:
-		return fmt.Errorf("invalid metric type: %d", req.MType)
+		return fmt.Errorf("invalid metric type: %s", req.MType)
 	}
 
 	return nil
