@@ -9,6 +9,7 @@ import (
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog/log"
 )
 
 type MetricsDB struct {
@@ -90,6 +91,9 @@ func (m *MetricsDB) UpdateMetricsBatch(ctx context.Context, metrics []models.Met
 	for _, mt := range metrics {
 		switch mt.MType {
 		case models.Gauge:
+			if mt.Value == nil {
+				continue
+			}
 			b := m.buildGaugeQuery(mt.ID, *mt.Value)
 			query, args, err := b.ToSql()
 			if err != nil {
@@ -97,6 +101,9 @@ func (m *MetricsDB) UpdateMetricsBatch(ctx context.Context, metrics []models.Met
 			}
 			batch.Queue(query, args...)
 		case models.Counter:
+			if mt.Delta == nil {
+				continue
+			}
 			b := m.buildCounterQuery(mt.ID, *mt.Delta)
 			query, args, err := b.ToSql()
 			if err != nil {
@@ -104,6 +111,27 @@ func (m *MetricsDB) UpdateMetricsBatch(ctx context.Context, metrics []models.Met
 			}
 			batch.Queue(query, args...)
 		}
+	}
+
+	if batch.Len() == 0 {
+		log.Warn().Msg("EMPTY BATCH")
+		return nil
+	}
+
+	bs := tx.SendBatch(ctx, &batch)
+	for i := 0; i < batch.Len(); i++ {
+		if _, err := bs.Exec(); err != nil {
+			err = bs.Close()
+			if err != nil {
+				return fmt.Errorf("failed to close batch in bs.Exec: %w", err)
+			}
+
+			return fmt.Errorf("failed to execute sql query metrics: %w", err)
+		}
+	}
+
+	if err := bs.Close(); err != nil {
+		return fmt.Errorf("failed to close batch: %w", err)
 	}
 
 	return tx.Commit(ctx)

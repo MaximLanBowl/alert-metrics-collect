@@ -373,3 +373,72 @@ func TestMetricsHandler_UpdateMetricsBatch(t *testing.T) {
 		})
 	}
 }
+
+func TestMetricsHandler_GetMetricsByValue(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		url    string
+		status int
+		body   []byte
+		setVal func(storage *repository.MemStorage)
+	}{
+		{
+			name:   "valid gauge metric",
+			method: http.MethodPost,
+			url:    baseURL + "/value/",
+			status: http.StatusOK,
+			body:   []byte(`{"id":"Alloc","type":"gauge"}`),
+			setVal: func(storage *repository.MemStorage) {
+				storage.SetGauge(t.Context(), "Alloc", 233880)
+			},
+		},
+		{
+			name:   "valid counter metric",
+			method: http.MethodPost,
+			url:    baseURL + "/value/",
+			status: http.StatusOK,
+			body:   []byte(`{"id":"PollCount","type":"counter"}`),
+			setVal: func(storage *repository.MemStorage) {
+				storage.SetCounter(t.Context(), "PollCount", 4)
+			},
+		},
+		{
+			name:   "metric not found",
+			method: http.MethodPost,
+			url:    baseURL + "/value/",
+			status: http.StatusNotFound,
+			body:   []byte(`{"id":"NonExistent","type":"gauge"}`),
+			setVal: func(storage *repository.MemStorage) {},
+		},
+		{
+			name:   "invalid metric type",
+			method: http.MethodPost,
+			url:    baseURL + "/value/",
+			status: http.StatusBadRequest,
+			body:   []byte(`{"id":"Alloc","type":"unknown"}`),
+			setVal: func(storage *repository.MemStorage) {},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := repository.NewMemStorage()
+			tt.setVal(storage)
+
+			cfg := config.ServerConfig{StoreInterval: 300}
+			h := newTestHandler(t, storage, cfg)
+
+			req := httptest.NewRequest(tt.method, tt.url, bytes.NewReader(tt.body))
+			w := httptest.NewRecorder()
+
+			r := chi.NewRouter()
+			r.Post("/value/", h.GetMetricsByValue)
+			r.ServeHTTP(w, req)
+
+			if w.Code != tt.status {
+				t.Errorf("wrong status code: got %v want %v", w.Code, tt.status)
+			}
+		})
+	}
+}
