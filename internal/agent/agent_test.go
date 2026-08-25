@@ -2,10 +2,12 @@ package agent
 
 import (
 	"compress/gzip"
+	"fmt"
 	"io"
 	"testing"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -80,4 +82,28 @@ func TestCompress(t *testing.T) {
 	t.Log(string(input), string(decompressed))
 
 	assert.Equal(t, input, decompressed)
+}
+
+func TestMemCollect_Batch(t *testing.T) {
+	m := NewMemCollect(config.AgentConfig{
+		Address:        "localhost:8080",
+		ReportInterval: 10,
+		PollInterval:   2,
+	})
+
+	m.mu.Lock()
+	for i := 0; i < 100; i++ {
+		m.gauges[fmt.Sprintf("metric_%d", i)] = float64(i)
+		log.Info().Msgf("metric_%d", i)
+	}
+	m.mu.Unlock()
+
+	m.Add()
+
+	select {
+	case batch := <-m.mtBatch:
+		if len(batch) != 100 {
+			t.Errorf("invalid batch length, got %d, expected %d", len(batch), 100)
+		}
+	}
 }

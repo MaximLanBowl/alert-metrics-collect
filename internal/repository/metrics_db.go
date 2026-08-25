@@ -7,6 +7,7 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/models"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -23,23 +24,7 @@ func NewDBStorage(pool *pgxpool.Pool) *MetricsDB {
 var psql = sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
 func (m *MetricsDB) SetGauge(ctx context.Context, name string, value float64) error {
-	b := psql.Insert("metrics").
-		Columns(
-			"id",
-			"mtype",
-			"value",
-		).
-		Values(
-			name,
-			models.Gauge,
-			value,
-		).
-		Suffix(
-			`ON CONFLICT (id) DO UPDATE SET
-			mtype = EXCLUDED.mtype,
-			value = EXCLUDED.value,
-			delta = NULL`,
-		)
+	b := m.buildGaugeQuery(name, value)
 
 	query, args, err := b.ToSql()
 	if err != nil {
@@ -55,23 +40,7 @@ func (m *MetricsDB) SetGauge(ctx context.Context, name string, value float64) er
 }
 
 func (m *MetricsDB) SetCounter(ctx context.Context, name string, delta int64) error {
-	b := psql.Insert("metrics").
-		Columns(
-			"id",
-			"mtype",
-			"delta",
-		).
-		Values(
-			name,
-			models.Counter,
-			delta,
-		).
-		Suffix(
-			`ON CONFLICT (id) DO UPDATE SET
-			mtype = EXCLUDED.mtype,
-			delta = COALESCE(metrics.delta, 0) + EXCLUDED.delta,
-			value = NULL`,
-		)
+	b := m.buildCounterQuery(name, delta)
 
 	query, args, err := b.ToSql()
 	if err != nil {
@@ -107,6 +76,37 @@ func (m *MetricsDB) UpdateMetrics(ctx context.Context, req models.Metrics) error
 	}
 
 	return nil
+}
+
+func (m *MetricsDB) UpdateMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
+	tx, err := m.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	batch := pgx.Batch{}
+
+	for _, mt := range metrics {
+		switch mt.MType {
+		case models.Gauge:
+			b := m.buildGaugeQuery(mt.ID, *mt.Value)
+			query, args, err := b.ToSql()
+			if err != nil {
+				return fmt.Errorf("failed to build sql query metrics: %w", err)
+			}
+			batch.Queue(query, args...)
+		case models.Counter:
+			b := m.buildCounterQuery(mt.ID, *mt.Delta)
+			query, args, err := b.ToSql()
+			if err != nil {
+				return fmt.Errorf("failed to build sql query metrics: %w", err)
+			}
+			batch.Queue(query, args...)
+		}
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (m *MetricsDB) GetAll(ctx context.Context, mtf models.MetricsFilter) ([]models.Metrics, error) {
@@ -200,6 +200,50 @@ func (m *MetricsDB) filter(b sq.SelectBuilder, f models.MetricsFilter) sq.Select
 	if f.MType != "" {
 		b = b.Where(sq.Eq{"mtype": f.MType})
 	}
+
+	return b
+}
+
+func (m *MetricsDB) buildGaugeQuery(name string, value float64) sq.InsertBuilder {
+	b := psql.Insert("metrics").
+		Columns(
+			"id",
+			"mtype",
+			"value",
+		).
+		Values(
+			name,
+			models.Gauge,
+			value,
+		).
+		Suffix(
+			`ON CONFLICT (id) DO UPDATE SET
+			mtype = EXCLUDED.mtype,
+			value = EXCLUDED.value,
+			delta = NULL`,
+		)
+
+	return b
+}
+
+func (m *MetricsDB) buildCounterQuery(name string, delta int64) sq.InsertBuilder {
+	b := psql.Insert("metrics").
+		Columns(
+			"id",
+			"mtype",
+			"delta",
+		).
+		Values(
+			name,
+			models.Counter,
+			delta,
+		).
+		Suffix(
+			`ON CONFLICT (id) DO UPDATE SET
+			mtype = EXCLUDED.mtype,
+			delta = COALESCE(metrics.delta, 0) + EXCLUDED.delta,
+			value = NULL`,
+		)
 
 	return b
 }

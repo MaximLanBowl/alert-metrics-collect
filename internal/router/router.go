@@ -22,6 +22,7 @@ func New(h *handler.Handlers) http.Handler {
 
 	// POST
 	r.Post("/update/{type}/{name}/{value}", h.Metrics.SetMetrics)
+	r.Post("/updates", h.Metrics.UpdateMetricsBatch)
 	r.Post("/update", h.Metrics.UpdateMetrics)
 	r.Post("/value", h.Metrics.GetMetricsByValue)
 

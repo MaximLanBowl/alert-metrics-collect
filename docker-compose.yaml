@@ -29,6 +29,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
     ports:
       - "8080:8080"
     volumes:
@@ -38,6 +39,12 @@ services:
       ADDRESS: "0.0.0.0:8080"
       DATABASE_DSN: ${DATABASE_DSN}
     command: go run ./cmd/server/main.go
+    healthcheck:
+      test: [ "CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8080 && exec 3<&-' || exit 1" ]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
 
 
   agent:  
@@ -46,6 +53,8 @@ services:
     restart: unless-stopped
     depends_on:
       postgres:
+        condition: service_healthy
+      server:
         condition: service_healthy
     volumes:
       - .:/app

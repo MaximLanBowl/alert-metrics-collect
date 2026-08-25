@@ -137,3 +137,14 @@ func (m *MemStorage) Restore(metrics []models.Metrics) error {
 
 	return nil
 }
+
+func (m *MemStorage) UpdateMetricsBatch(_ context.Context, metrics []models.Metrics) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, mt := range metrics {
+		m.updateMetricsLocked(mt)
+	}
+
+	return nil
+}

@@ -19,6 +19,8 @@ import (
 
 type MemCollect struct {
 	mu             sync.Mutex
+	wg             sync.WaitGroup
+	mtBatch        chan []models.Metrics
 	gauges         map[string]float64
 	counters       map[string]int64
 	baseURL        string
@@ -29,6 +31,7 @@ type MemCollect struct {
 
 func NewMemCollect(cfg config.AgentConfig) *MemCollect {
 	return &MemCollect{
+		mtBatch:  make(chan []models.Metrics, 100),
 		gauges:   make(map[string]float64),
 		counters: make(map[string]int64),
 		baseURL:  "http://" + cfg.Address,
@@ -177,6 +180,9 @@ func (m *MemCollect) Send() {
 }
 
 func (m *MemCollect) Run() {
+	m.wg.Add(1)
+	go m.sendBatch()
+
 	go func() {
 		for {
 			time.Sleep(m.pollInterval)
@@ -187,7 +193,93 @@ func (m *MemCollect) Run() {
 
 	for {
 		time.Sleep(m.reportInterval)
-		m.Send()
-		log.Info().Msg("Metrics sent")
+		m.Add()
+		log.Info().Msg("Metrics add")
 	}
+}
+
+func (m *MemCollect) sendBatch() {
+	defer m.wg.Done()
+	for bt := range m.mtBatch {
+		if err := m.flush(bt); err != nil {
+			log.Error().Err(err).Msg("failed to send batch")
+		}
+	}
+}
+
+func (m *MemCollect) flush(metrics []models.Metrics) error {
+	body, err := json.Marshal(metrics)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metrics: %w", err)
+	}
+
+	cmpr, err := compress(body)
+	if err != nil {
+		return fmt.Errorf("failed to compress metrics: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, m.baseURL+"/updates/", cmpr)
+	log.Info().Msgf("url in request: %s", req.URL.String())
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	log.Info().RawJSON("request", body).Msg("Request body")
+
+	resp, err := m.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err = Body.Close()
+		if err != nil {
+			log.Error().Err(err).Msg("failed to close response body")
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to send request: %s", resp.Status)
+	}
+
+	return nil
+}
+
+func (m *MemCollect) Add() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	batch := make([]models.Metrics, 0, len(m.gauges)+len(m.counters))
+
+	for name, value := range m.gauges {
+		batch = append(batch, models.Metrics{
+			ID:    name,
+			MType: models.Gauge,
+			Value: &value,
+		})
+	}
+
+	for name, delta := range m.counters {
+		batch = append(batch, models.Metrics{
+			ID:    name,
+			MType: models.Counter,
+			Delta: &delta,
+		})
+		m.counters[name] = 0
+	}
+
+	if len(batch) == 0 {
+		log.Debug().Msg("no metrics to send")
+		return
+	}
+
+	m.mtBatch <- batch
+}
+
+func (m *MemCollect) Close() {
+	close(m.mtBatch)
+	m.wg.Wait()
 }

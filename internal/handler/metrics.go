@@ -140,6 +140,61 @@ func (m *MetricsHandler) UpdateMetrics(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(resp)
 }
 
+func (m *MetricsHandler) UpdateMetricsBatch(w http.ResponseWriter, r *http.Request) {
+	if !methodCheck(w, r) {
+		return
+	}
+
+	var mts []models.Metrics
+	if err := json.NewDecoder(r.Body).Decode(&mts); err != nil {
+		http.Error(w, "failed to decode request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(mts) == 0 {
+		http.Error(w, "no metrics provided", http.StatusBadRequest)
+		return
+	}
+
+	for _, mt := range mts {
+		if !typeCheck(mt, w) {
+			http.Error(w, "invalid metric type", http.StatusBadRequest)
+			return
+		}
+
+		if mt.MType == models.Gauge && mt.Value == nil {
+			http.Error(w, "invalid request value gauge", http.StatusBadRequest)
+			return
+		}
+
+		if mt.MType == models.Counter && mt.Delta == nil {
+			http.Error(w, "invalid request value counter", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if err := m.metricHandler.UpdateMetricsBatch(r.Context(), mts); err != nil {
+		log.Warn().Err(err).Msg("failed to update metrics batch")
+		http.Error(w, "failed to update metrics batch", http.StatusInternalServerError)
+		return
+	}
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(mts); err != nil {
+		log.Warn().Err(err).Msg("failed to write response")
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		log.Warn().Err(err).Msg("failed to write response")
+		http.Error(w, "failed to write response", http.StatusInternalServerError)
+		return
+	}
+}
+
 func (m *MetricsHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	mtype := chi.URLParam(r, "type")
 	mname := chi.URLParam(r, "name")
@@ -161,7 +216,6 @@ func (m *MetricsHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(
 			strconv.FormatFloat(value, 'f', -1, 64),
 		))
-
 	case models.Counter:
 		value, ok := m.metricHandler.GetCounter(r.Context(), mname)
 		if !ok {

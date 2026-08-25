@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -296,6 +297,74 @@ func TestMetricsHandler_UpdateMetrics(t *testing.T) {
 
 			r := chi.NewRouter()
 			r.Post("/update", h.UpdateMetrics)
+			r.ServeHTTP(w, req)
+
+			if w.Code != tt.status {
+				t.Errorf("wrong status code: got %v want %v", w.Code, tt.status)
+			}
+		})
+	}
+}
+
+func TestMetricsHandler_UpdateMetricsBatch(t *testing.T) {
+	tests := []struct {
+		method string
+		url    string
+		status int
+		name   string
+		mts    []models.Metrics
+	}{
+		{
+			method: http.MethodPost,
+			url:    baseURL + "/updates",
+			status: http.StatusOK,
+			name:   "VALID UPDATE",
+			mts: []models.Metrics{
+				{
+					ID:    "Alloc",
+					MType: models.Gauge,
+					Value: new(42.5),
+				},
+				{
+					ID:    "PollCount",
+					MType: models.Counter,
+					Delta: new(int64(10)),
+				},
+			},
+		},
+		{
+			method: http.MethodPost,
+			url:    baseURL + "/updates",
+			status: http.StatusBadRequest,
+			name:   "EMPTY BATCH",
+			mts:    []models.Metrics{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			storage := repository.NewMemStorage()
+			cfg := config.ServerConfig{StoreInterval: 300}
+			h := newTestHandler(t, storage, cfg)
+
+			body, err := json.Marshal(tt.mts)
+			if err != nil {
+				t.Error(err)
+			}
+
+			log.Info().
+				Str("method", tt.method).
+				Str("url", tt.url).
+				Str("status", http.StatusText(tt.status)).
+				Str("len of batch:", fmt.Sprintf("%d", len(tt.mts))).
+				RawJSON("request", body).Msg(
+				"Request body",
+			)
+
+			req := httptest.NewRequest(tt.method, tt.url, bytes.NewReader(body))
+			w := httptest.NewRecorder()
+
+			r := chi.NewRouter()
+			r.Post("/updates", h.UpdateMetricsBatch)
 			r.ServeHTTP(w, req)
 
 			if w.Code != tt.status {
