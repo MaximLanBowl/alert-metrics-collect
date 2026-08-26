@@ -140,14 +140,20 @@ func (m *MemCollect) post(metric models.Metrics) error {
 
 	log.Info().RawJSON("request", body).Msg("Request body")
 
-	resp, err := m.client.Do(req)
+	err = wrappers.WithRetry(func() error {
+		resp, err := m.client.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to send request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("failed to send request: %s", resp.Status)
+		}
+		return nil
+	})
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to send request: %s", resp.Status)
 	}
 
 	return nil
