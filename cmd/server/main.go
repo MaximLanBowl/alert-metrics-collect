@@ -43,7 +43,6 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("failed to init postgres: %w", err)
 		}
-
 		defer connPool.Close()
 
 		storage = repository.NewDBStorage(connPool)

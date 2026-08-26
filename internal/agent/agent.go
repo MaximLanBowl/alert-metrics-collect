@@ -14,6 +14,7 @@ import (
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
 	models "github.com/MaximLanBowl/alert-metrics-collect/internal/models"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/wrappers"
 	"github.com/rs/zerolog/log"
 )
 
@@ -230,20 +231,24 @@ func (m *MemCollect) flush(metrics []models.Metrics) error {
 
 	log.Info().RawJSON("request", body).Msg("Request body")
 
-	resp, err := m.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer func(Body io.ReadCloser) {
-		err = Body.Close()
+	err = wrappers.WithRetry(func() error {
+		resp, err := m.client.Do(req)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to close response body")
+			return fmt.Errorf("failed to send request: %w", err)
 		}
-	}(resp.Body)
+		defer func(Body io.ReadCloser) {
+			err = Body.Close()
+			if err != nil {
+				log.Error().Err(err).Msg("failed to close response body")
+			}
+		}(resp.Body)
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to send request: %s", resp.Status)
-	}
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("failed to send request: %s", resp.Status)
+		}
+
+		return nil
+	})
 
 	return nil
 }

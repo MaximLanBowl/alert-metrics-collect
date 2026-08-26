@@ -6,8 +6,10 @@ import (
 	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/db"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 	"github.com/jackc/pgx/v5"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
 )
@@ -57,6 +59,12 @@ func (m *MetricsDB) SetCounter(ctx context.Context, name string, delta int64) er
 }
 
 func (m *MetricsDB) UpdateMetrics(ctx context.Context, req models.Metrics) error {
+	return db.WithRetry(func() error {
+		return m.updateMetrics(ctx, req)
+	})
+}
+
+func (m *MetricsDB) updateMetrics(ctx context.Context, req models.Metrics) error {
 	switch req.MType {
 	case models.Gauge:
 		if req.Value == nil {
@@ -80,6 +88,12 @@ func (m *MetricsDB) UpdateMetrics(ctx context.Context, req models.Metrics) error
 }
 
 func (m *MetricsDB) UpdateMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
+	return db.WithRetry(func() error {
+		return m.updateMetricsBatch(ctx, metrics)
+	})
+}
+
+func (m *MetricsDB) updateMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
 	tx, err := m.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to start transaction: %w", err)
@@ -130,7 +144,7 @@ func (m *MetricsDB) UpdateMetricsBatch(ctx context.Context, metrics []models.Met
 		}
 	}
 
-	if err := bs.Close(); err != nil {
+	if err = bs.Close(); err != nil {
 		return fmt.Errorf("failed to close batch: %w", err)
 	}
 
