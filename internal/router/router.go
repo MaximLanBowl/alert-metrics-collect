@@ -15,7 +15,7 @@ func New(h *handler.Handlers) http.Handler {
 
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.StripSlashes)
-
+	
 	// Custom
 	r.Use(gzipmdv.Compressor)
 	r.Use(logger.WithLogging)
