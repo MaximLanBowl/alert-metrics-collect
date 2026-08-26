@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/MaximLanBowl/alert-metrics-collect/internal/db"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/models"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/wrappers"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -59,7 +59,7 @@ func (m *MetricsDB) SetCounter(ctx context.Context, name string, delta int64) er
 }
 
 func (m *MetricsDB) UpdateMetrics(ctx context.Context, req models.Metrics) error {
-	return db.WithRetry(func() error {
+	return wrappers.WithRetry(func() error {
 		return m.updateMetrics(ctx, req)
 	})
 }
@@ -88,7 +88,7 @@ func (m *MetricsDB) updateMetrics(ctx context.Context, req models.Metrics) error
 }
 
 func (m *MetricsDB) UpdateMetricsBatch(ctx context.Context, metrics []models.Metrics) error {
-	return db.WithRetry(func() error {
+	return wrappers.WithRetry(func() error {
 		return m.updateMetricsBatch(ctx, metrics)
 	})
 }

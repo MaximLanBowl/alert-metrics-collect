@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand/v2"
 	"net/http"
 	"runtime"
@@ -145,12 +144,7 @@ func (m *MemCollect) post(metric models.Metrics) error {
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer func(Body io.ReadCloser) {
-		err = Body.Close()
-		if err != nil {
-			log.Error().Err(err).Msg("failed to close response body")
-		}
-	}(resp.Body)
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to send request: %s", resp.Status)
@@ -220,7 +214,6 @@ func (m *MemCollect) flush(metrics []models.Metrics) error {
 	}
 
 	req, err := http.NewRequest(http.MethodPost, m.baseURL+"/updates/", cmpr)
-	log.Info().Msgf("url in request: %s", req.URL.String())
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -229,6 +222,7 @@ func (m *MemCollect) flush(metrics []models.Metrics) error {
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Accept-Encoding", "gzip")
 
+	log.Info().Msgf("url in request: %s", req.URL.String())
 	log.Info().RawJSON("request", body).Msg("Request body")
 
 	err = wrappers.WithRetry(func() error {
@@ -236,12 +230,7 @@ func (m *MemCollect) flush(metrics []models.Metrics) error {
 		if err != nil {
 			return fmt.Errorf("failed to send request: %w", err)
 		}
-		defer func(Body io.ReadCloser) {
-			err = Body.Close()
-			if err != nil {
-				log.Error().Err(err).Msg("failed to close response body")
-			}
-		}(resp.Body)
+		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("failed to send request: %s", resp.Status)
@@ -249,6 +238,9 @@ func (m *MemCollect) flush(metrics []models.Metrics) error {
 
 		return nil
 	})
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
 
 	return nil
 }
