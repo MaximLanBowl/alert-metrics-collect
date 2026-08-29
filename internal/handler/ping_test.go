@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -49,5 +50,13 @@ func TestPingDatabase(t *testing.T) {
 				t.Errorf("Expected status code %d, got %d", tt.status, w.Code)
 			}
 		})
+	}
+}
+
+func TestNoopPinger_Ping(t *testing.T) {
+	np := &NoopPinger{}
+	err := np.Ping(context.Background())
+	if err != nil {
+		t.Errorf("expected nil error, got %v", err)
 	}
 }

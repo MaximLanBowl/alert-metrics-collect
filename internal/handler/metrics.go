@@ -92,10 +92,6 @@ func (m *MetricsHandler) SetMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *MetricsHandler) UpdateMetrics(w http.ResponseWriter, r *http.Request) {
-	if !methodCheck(w, r) {
-		return
-	}
-
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "failed to read body", http.StatusBadRequest)
@@ -141,10 +137,6 @@ func (m *MetricsHandler) UpdateMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *MetricsHandler) UpdateMetricsBatch(w http.ResponseWriter, r *http.Request) {
-	if !methodCheck(w, r) {
-		return
-	}
-
 	var mts []models.Metrics
 	if err := json.NewDecoder(r.Body).Decode(&mts); err != nil {
 		http.Error(w, "failed to decode request body", http.StatusBadRequest)
@@ -265,10 +257,6 @@ func (m *MetricsHandler) GetMetricsList(w http.ResponseWriter, r *http.Request) 
 }
 
 func (m *MetricsHandler) GetMetricsByValue(w http.ResponseWriter, r *http.Request) {
-	if !methodCheck(w, r) {
-		return
-	}
-
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "failed to read body", http.StatusBadRequest)
@@ -387,15 +375,6 @@ func (m *MetricsHandler) StartAutoSave() {
 func typeCheck(req models.Metrics, w http.ResponseWriter) bool {
 	if req.MType != models.Gauge && req.MType != models.Counter {
 		http.Error(w, "invalid metric type", http.StatusBadRequest)
-		return false
-	}
-
-	return true
-}
-
-func methodCheck(w http.ResponseWriter, r *http.Request) bool {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
 		return false
 	}
 

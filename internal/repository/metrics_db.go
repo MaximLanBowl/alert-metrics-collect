@@ -134,13 +134,13 @@ func (m *MetricsDB) updateMetricsBatch(ctx context.Context, metrics []models.Met
 
 	bs := tx.SendBatch(ctx, &batch)
 	for i := 0; i < batch.Len(); i++ {
-		if _, err := bs.Exec(); err != nil {
-			err = bs.Close()
-			if err != nil {
-				return fmt.Errorf("failed to close batch in bs.Exec: %w", err)
+		if _, errEx := bs.Exec(); errEx != nil {
+			errCl := bs.Close()
+			if errCl != nil {
+				return fmt.Errorf("failed to close batch in bs.Exec: %w", errCl)
 			}
 
-			return fmt.Errorf("failed to execute sql query metrics: %w", err)
+			return fmt.Errorf("failed to execute sql query metrics: %w", errEx)
 		}
 	}
 

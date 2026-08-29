@@ -31,7 +31,7 @@ type MemCollect struct {
 
 func NewMemCollect(cfg config.AgentConfig) *MemCollect {
 	return &MemCollect{
-		mtBatch:  make(chan []models.Metrics, 100),
+		mtBatch:  make(chan []models.Metrics, 1),
 		gauges:   make(map[string]float64),
 		counters: make(map[string]int64),
 		baseURL:  "http://" + cfg.Address,
@@ -124,23 +124,25 @@ func (m *MemCollect) post(metric models.Metrics) error {
 		return fmt.Errorf("failed to marshal metric: %w", err)
 	}
 
-	compressed, err := compress(body)
+	cmpr, err := compress(body)
 	if err != nil {
 		return fmt.Errorf("failed to compress request body: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, m.baseURL+"/update", compressed)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "gzip")
-	req.Header.Set("Accept-Encoding", "gzip")
-
-	log.Info().RawJSON("request", body).Msg("Request body")
+	cmprBytes := cmpr.Bytes()
 
 	err = wrappers.WithRetry(func() error {
+		req, err := http.NewRequest(http.MethodPost, m.baseURL+"/update", bytes.NewReader(cmprBytes))
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", "gzip")
+		req.Header.Set("Accept-Encoding", "gzip")
+
+		log.Info().RawJSON("request", body).Msg("Request body")
+
 		resp, err := m.client.Do(req)
 		if err != nil {
 			return fmt.Errorf("failed to send request: %w", err)
@@ -218,20 +220,20 @@ func (m *MemCollect) flush(metrics []models.Metrics) error {
 	if err != nil {
 		return fmt.Errorf("failed to compress metrics: %w", err)
 	}
-
-	req, err := http.NewRequest(http.MethodPost, m.baseURL+"/updates/", cmpr)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "gzip")
-	req.Header.Set("Accept-Encoding", "gzip")
-
-	log.Info().Msgf("url in request: %s", req.URL.String())
-	log.Info().RawJSON("request", body).Msg("Request body")
+	cmprBytes := cmpr.Bytes()
 
 	err = wrappers.WithRetry(func() error {
+		req, err := http.NewRequest(http.MethodPost, m.baseURL+"/updates/", bytes.NewReader(cmprBytes))
+		if err != nil {
+			return fmt.Errorf("failed to create request: %w", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Encoding", "gzip")
+		req.Header.Set("Accept-Encoding", "gzip")
+
+		log.Info().Msgf("url in request: %s", req.URL.String())
+		log.Info().RawJSON("request", body).Msg("Request body")
 		resp, err := m.client.Do(req)
 		if err != nil {
 			return fmt.Errorf("failed to send request: %w", err)

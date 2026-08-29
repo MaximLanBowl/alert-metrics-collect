@@ -57,9 +57,11 @@ func run() error {
 		}
 
 		storage = repository.NewMemStorage()
+		ping = &handler.NoopPinger{}
 
 	default:
 		storage = repository.NewMemStorage()
+		ping = &handler.NoopPinger{}
 	}
 
 	h := &handler.Handlers{
