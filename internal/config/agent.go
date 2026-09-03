@@ -11,6 +11,7 @@ type AgentConfig struct {
 	Address        string `env:"ADDRESS"`
 	ReportInterval int    `env:"REPORT_INTERVAL"`
 	PollInterval   int    `env:"POLL_INTERVAL"`
+	SecretKey      string `env:"KEY"`
 }
 
 func LoadAgent(args []string) (AgentConfig, error) {
@@ -19,6 +20,7 @@ func LoadAgent(args []string) (AgentConfig, error) {
 	addr := fs.String("a", "localhost:8080", "server listen address")
 	reportInterval := fs.Int("r", 10, "report timeout")
 	pollInterval := fs.Int("p", 2, "poll timeout")
+	skey := fs.String("k", "", "agent secret key")
 
 	if err := fs.Parse(args); err != nil {
 		return AgentConfig{}, fmt.Errorf("failed to parse flags: %w", err)
@@ -28,6 +30,7 @@ func LoadAgent(args []string) (AgentConfig, error) {
 		Address:        *addr,
 		ReportInterval: *reportInterval,
 		PollInterval:   *pollInterval,
+		SecretKey:      *skey,
 	}
 
 	if err := env.Parse(&cfg); err != nil {

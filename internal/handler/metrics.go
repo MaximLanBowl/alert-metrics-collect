@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/middleware"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
@@ -130,10 +131,15 @@ func (m *MetricsHandler) UpdateMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if m.cfg.SecretKey != "" {
+		w.Header().Set("HashSHA256", middleware.CalcHash(resp, m.cfg.SecretKey))
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-
-	_, _ = w.Write(resp)
+	if _, err = w.Write(resp); err != nil {
+		log.Warn().Err(err).Msg("failed to write response")
+		return
+	}
 }
 
 func (m *MetricsHandler) UpdateMetricsBatch(w http.ResponseWriter, r *http.Request) {
@@ -178,11 +184,13 @@ func (m *MetricsHandler) UpdateMetricsBatch(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if m.cfg.SecretKey != "" {
+		w.Header().Set("HashSHA256", middleware.CalcHash(buf.Bytes(), m.cfg.SecretKey))
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(buf.Bytes()); err != nil {
 		log.Warn().Err(err).Msg("failed to write response")
-		http.Error(w, "failed to write response", http.StatusInternalServerError)
 		return
 	}
 }
@@ -204,10 +212,16 @@ func (m *MetricsHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		respBody := strconv.FormatFloat(value, 'f', -1, 64)
+
+		if m.cfg.SecretKey != "" {
+			w.Header().Set("HashSHA256", middleware.CalcHash([]byte(respBody), m.cfg.SecretKey))
+		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(
-			strconv.FormatFloat(value, 'f', -1, 64),
-		))
+		if _, err := w.Write([]byte(respBody)); err != nil {
+			log.Warn().Err(err).Msg("failed to write response")
+			return
+		}
 	case models.Counter:
 		value, ok := m.metricHandler.GetCounter(r.Context(), mname)
 		if !ok {
@@ -215,10 +229,16 @@ func (m *MetricsHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		respBody := strconv.FormatInt(value, 10)
+
+		if m.cfg.SecretKey != "" {
+			w.Header().Set("HashSHA256", middleware.CalcHash([]byte(respBody), m.cfg.SecretKey))
+		}
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(
-			strconv.FormatInt(value, 10),
-		))
+		if _, err := w.Write([]byte(respBody)); err != nil {
+			log.Warn().Err(err).Msg("failed to write response")
+			return
+		}
 
 	default:
 		http.Error(w, "invalid metric type", http.StatusBadRequest)
@@ -231,29 +251,26 @@ func (m *MetricsHandler) GetMetricsList(w http.ResponseWriter, r *http.Request) 
 		models.MetricsFilter{},
 	)
 	if err != nil {
-		http.Error(
-			w,
-			http.StatusText(http.StatusInternalServerError),
-			http.StatusInternalServerError,
-		)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	var buf bytes.Buffer
 
-	if err := indexTmp.Execute(&buf, metrics); err != nil {
-		http.Error(
-			w,
-			http.StatusText(http.StatusInternalServerError),
-			http.StatusInternalServerError,
-		)
+	if err = indexTmp.Execute(&buf, metrics); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
+	if m.cfg.SecretKey != "" {
+		w.Header().Set("HashSHA256", middleware.CalcHash(buf.Bytes(), m.cfg.SecretKey))
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-
-	_, _ = w.Write(buf.Bytes())
+	if _, err = w.Write(buf.Bytes()); err != nil {
+		log.Warn().Err(err).Msg("failed to write response")
+		return
+	}
 }
 
 func (m *MetricsHandler) GetMetricsByValue(w http.ResponseWriter, r *http.Request) {
@@ -285,10 +302,15 @@ func (m *MetricsHandler) GetMetricsByValue(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if m.cfg.SecretKey != "" {
+		w.Header().Set("HashSHA256", middleware.CalcHash(resp, m.cfg.SecretKey))
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-
-	_, _ = w.Write(resp)
+	if _, err = w.Write(resp); err != nil {
+		log.Warn().Err(err).Msg("failed to write response")
+		return
+	}
 }
 
 func (m *MetricsHandler) Restore(consumer MetricsConsumer) error {
@@ -310,7 +332,7 @@ func (m *MetricsHandler) Restore(consumer MetricsConsumer) error {
 		return fmt.Errorf("failed to read metrics: %w", err)
 	}
 
-	if err := storage.Restore(metrics); err != nil {
+	if err = storage.Restore(metrics); err != nil {
 		return fmt.Errorf("failed to restore metrics: %w", err)
 	}
 
@@ -331,7 +353,7 @@ func (m *MetricsHandler) syncSave() {
 		return
 	}
 
-	if err := m.producer.WriteMetrics(metrics); err != nil {
+	if err = m.producer.WriteMetrics(metrics); err != nil {
 		log.Warn().Err(err).Msg("failed to write metrics")
 	}
 }
