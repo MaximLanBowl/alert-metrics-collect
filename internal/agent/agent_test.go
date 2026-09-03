@@ -104,6 +104,8 @@ func TestMemCollect_Batch(t *testing.T) {
 	m.Add()
 
 	select {
+	case <-t.Context().Done():
+		t.Errorf("Timeout waiting for batch: %v", t.Context().Err())
 	case batch := <-m.mtBatch:
 		if len(batch) != 100 {
 			t.Errorf("invalid batch length, got %d, expected %d", len(batch), 100)
