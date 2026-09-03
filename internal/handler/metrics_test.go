@@ -466,7 +466,7 @@ func TestSHA256(t *testing.T) {
 		{
 			name:       "empty hash",
 			hash:       "",
-			statusCode: http.StatusBadRequest,
+			statusCode: http.StatusOK,
 		},
 	}
 

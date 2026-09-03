@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -187,22 +188,30 @@ func (m *MemCollect) Send() {
 	}
 }
 
-func (m *MemCollect) Run() {
+func (m *MemCollect) Run(ctx context.Context) {
 	m.wg.Add(1)
 	go m.sendBatch()
 
 	go func() {
 		for {
-			time.Sleep(m.pollInterval)
-			m.collect()
-			log.Info().Msg("Runtime metrics collected")
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(m.pollInterval):
+				m.collect()
+				log.Info().Msg("Runtime metrics collected")
+			}
 		}
 	}()
 
 	for {
-		time.Sleep(m.reportInterval)
-		m.Add()
-		log.Info().Msg("Metrics add")
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(m.reportInterval):
+			m.Add()
+			log.Info().Msg("Metrics add")
+		}
 	}
 }
 

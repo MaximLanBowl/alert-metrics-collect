@@ -16,6 +16,7 @@ func TestMemCollect(t *testing.T) {
 		Address:        "localhost:8080",
 		ReportInterval: 10,
 		PollInterval:   2,
+		SecretKey:      "",
 	})
 
 	m.collect()
@@ -46,6 +47,7 @@ func TestPollCountIncrements(t *testing.T) {
 		Address:        "localhost:8080",
 		ReportInterval: 10,
 		PollInterval:   2,
+		SecretKey:      "",
 	})
 
 	m.collect()
@@ -89,6 +91,7 @@ func TestMemCollect_Batch(t *testing.T) {
 		Address:        "localhost:8080",
 		ReportInterval: 10,
 		PollInterval:   2,
+		SecretKey:      "",
 	})
 
 	m.mu.Lock()

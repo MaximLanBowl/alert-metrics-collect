@@ -308,7 +308,7 @@ func (m *MetricsHandler) GetMetricsByValue(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if _, err = w.Write(resp); err != nil {
-		log.Warn().Err(err).Msg("failed to write response")
+		log.Warn().Err(err).Msg("failed to write response by value")
 		return
 	}
 }
