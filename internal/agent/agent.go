@@ -3,6 +3,10 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
@@ -27,6 +31,7 @@ type MemCollect struct {
 	client         *http.Client
 	pollInterval   time.Duration
 	reportInterval time.Duration
+	secretKey      string
 }
 
 func NewMemCollect(cfg config.AgentConfig) *MemCollect {
@@ -40,6 +45,7 @@ func NewMemCollect(cfg config.AgentConfig) *MemCollect {
 		},
 		reportInterval: time.Duration(cfg.ReportInterval) * time.Second,
 		pollInterval:   time.Duration(cfg.PollInterval) * time.Second,
+		secretKey:      cfg.SecretKey,
 	}
 }
 
@@ -182,22 +188,30 @@ func (m *MemCollect) Send() {
 	}
 }
 
-func (m *MemCollect) Run() {
+func (m *MemCollect) Run(ctx context.Context) {
 	m.wg.Add(1)
 	go m.sendBatch()
 
 	go func() {
 		for {
-			time.Sleep(m.pollInterval)
-			m.collect()
-			log.Info().Msg("Runtime metrics collected")
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(m.pollInterval):
+				m.collect()
+				log.Info().Msg("Runtime metrics collected")
+			}
 		}
 	}()
 
 	for {
-		time.Sleep(m.reportInterval)
-		m.Add()
-		log.Info().Msg("Metrics add")
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(m.reportInterval):
+			m.Add()
+			log.Info().Msg("Metrics add")
+		}
 	}
 }
 
@@ -216,6 +230,8 @@ func (m *MemCollect) flush(metrics []models.Metrics) error {
 		return fmt.Errorf("failed to marshal metrics: %w", err)
 	}
 
+	hashStr := m.calcHash(body, m.secretKey)
+
 	cmpr, err := compress(body)
 	if err != nil {
 		return fmt.Errorf("failed to compress metrics: %w", err)
@@ -229,6 +245,9 @@ func (m *MemCollect) flush(metrics []models.Metrics) error {
 		}
 
 		req.Header.Set("Content-Type", "application/json")
+		if m.secretKey != "" {
+			req.Header.Set("HashSHA256", hashStr)
+		}
 		req.Header.Set("Content-Encoding", "gzip")
 		req.Header.Set("Accept-Encoding", "gzip")
 
@@ -287,4 +306,10 @@ func (m *MemCollect) Add() {
 func (m *MemCollect) Close() {
 	close(m.mtBatch)
 	m.wg.Wait()
+}
+
+func (m *MemCollect) calcHash(data []byte, key string) string {
+	h := hmac.New(sha256.New, []byte(key))
+	h.Write(data)
+	return hex.EncodeToString(h.Sum(nil))
 }

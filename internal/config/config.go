@@ -49,6 +49,7 @@ type ServerConfig struct {
 	StoreInterval   int    `env:"STORE_INTERVAL"`
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	Restore         bool   `env:"RESTORE"`
+	SecretKey       string `env:"KEY"`
 }
 
 func loadServer(flags Flags) (ServerConfig, error) {
@@ -57,6 +58,7 @@ func loadServer(flags Flags) (ServerConfig, error) {
 		StoreInterval:   flags.StoreInterval,
 		FileStoragePath: flags.FileStoragePath,
 		Restore:         flags.Restore,
+		SecretKey:       flags.SecretKey,
 	}
 
 	if err := env.Parse(&cfg); err != nil {
