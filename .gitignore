@@ -5,6 +5,8 @@
 *.so
 *.dylib
 
+.env
+
 # Test binary, built with `go test -c`
 *.test
 
@@ -23,3 +25,5 @@ vendor/
 # IDEs directories
 .idea
 .vscode
+
+runtime_metrics.json

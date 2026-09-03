@@ -1,23 +1,28 @@
 package main
 
 import (
-	"flag"
-	"time"
+	"fmt"
+	"log"
+	"os"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/agent"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
 )
 
 func main() {
-	addr := flag.String("a", "localhost:8080", "server listen address")
-	reportInterval := flag.Int("r", 10, "report timeout")
-	pollInterval := flag.Int("p", 2, "poll timeout")
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
 
-	flag.Parse()
+func run() error {
+	cfg, err := config.LoadAgent(os.Args[1:])
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
 
-	baseURL := "http://" + *addr
-	rVal := time.Duration(*reportInterval) * time.Second
-	pVal := time.Duration(*pollInterval) * time.Second
-
-	collector := agent.NewMemCollect(baseURL, rVal, pVal)
+	collector := agent.NewMemCollect(cfg)
 	collector.Run()
+
+	return nil
 }
