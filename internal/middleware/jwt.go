@@ -40,7 +40,7 @@ func HashSH256(key string) func(handler http.Handler) http.Handler {
 					return
 				}
 			}
-			
+
 			next.ServeHTTP(w, r)
 		})
 	}

@@ -16,15 +16,17 @@ import (
 	"time"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
-	models "github.com/MaximLanBowl/alert-metrics-collect/internal/models"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/wrappers"
 	"github.com/rs/zerolog/log"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/mem"
 )
 
 type MemCollect struct {
 	mu             sync.Mutex
 	wg             sync.WaitGroup
-	mtBatch        chan []models.Metrics
+	jobs           chan []models.Metrics
 	gauges         map[string]float64
 	counters       map[string]int64
 	baseURL        string
@@ -32,11 +34,12 @@ type MemCollect struct {
 	pollInterval   time.Duration
 	reportInterval time.Duration
 	secretKey      string
+	rateLimit      int
 }
 
 func NewMemCollect(cfg config.AgentConfig) *MemCollect {
 	return &MemCollect{
-		mtBatch:  make(chan []models.Metrics, 1),
+		jobs:     make(chan []models.Metrics, cfg.RateLimit),
 		gauges:   make(map[string]float64),
 		counters: make(map[string]int64),
 		baseURL:  "http://" + cfg.Address,
@@ -46,6 +49,7 @@ func NewMemCollect(cfg config.AgentConfig) *MemCollect {
 		reportInterval: time.Duration(cfg.ReportInterval) * time.Second,
 		pollInterval:   time.Duration(cfg.PollInterval) * time.Second,
 		secretKey:      cfg.SecretKey,
+		rateLimit:      cfg.RateLimit,
 	}
 }
 
@@ -86,6 +90,33 @@ func (m *MemCollect) collect() {
 	m.gauges["RandomValue"] = rand.Float64()
 
 	m.counters["PollCount"]++
+}
+
+func (m *MemCollect) collectMemCPU() {
+	memory, err := mem.VirtualMemory()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get memory stats")
+		return
+	}
+
+	percentCPU, err := cpu.Percent(0, true)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get cpu utilization")
+		return
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.gauges["TotalMemory"] = float64(memory.Total)
+	m.gauges["FreeMemory"] = float64(memory.Free)
+
+	if len(percentCPU) > 0 {
+		for i, p := range percentCPU {
+			name := fmt.Sprintf("CPUutilization%d", i+1)
+			m.gauges[name] = p
+		}
+	}
 }
 
 func (m *MemCollect) sendGauge(name string, value float64) error {
@@ -188,21 +219,43 @@ func (m *MemCollect) Send() {
 	}
 }
 
-func (m *MemCollect) Run(ctx context.Context) {
-	m.wg.Add(1)
-	go m.sendBatch()
-
+func (m *MemCollect) worker(ctx context.Context) {
 	go func() {
+		ticker := time.NewTicker(m.pollInterval)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(m.pollInterval):
+			case <-ticker.C:
 				m.collect()
 				log.Info().Msg("Runtime metrics collected")
 			}
 		}
 	}()
+
+	go func() {
+		ticker := time.NewTicker(m.pollInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				m.collectMemCPU()
+				log.Info().Msg("Runtime CPU metrics collected")
+			}
+		}
+	}()
+}
+
+func (m *MemCollect) Run(ctx context.Context) {
+	for i := 0; i < m.rateLimit; i++ {
+		m.wg.Add(1)
+		go m.sendBatch()
+	}
+
+	go m.worker(ctx)
 
 	for {
 		select {
@@ -217,7 +270,7 @@ func (m *MemCollect) Run(ctx context.Context) {
 
 func (m *MemCollect) sendBatch() {
 	defer m.wg.Done()
-	for bt := range m.mtBatch {
+	for bt := range m.jobs {
 		if err := m.flush(bt); err != nil {
 			log.Error().Err(err).Msg("failed to send batch")
 		}
@@ -300,11 +353,11 @@ func (m *MemCollect) Add() {
 		return
 	}
 
-	m.mtBatch <- batch
+	m.jobs <- batch
 }
 
 func (m *MemCollect) Close() {
-	close(m.mtBatch)
+	close(m.jobs)
 	m.wg.Wait()
 }
 

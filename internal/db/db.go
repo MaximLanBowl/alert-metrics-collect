@@ -22,10 +22,21 @@ func Init(cfg config.PostgresConfig) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
+	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseDSN)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	poolCfg.MaxConns = 40
+	poolCfg.MinConns = 1
+	poolCfg.MaxConnLifetime = time.Hour
+	poolCfg.HealthCheckPeriod = time.Minute
+	poolCfg.MaxConnIdleTime = time.Minute * 30
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
 
-	connPool, err := pgxpool.New(ctx, cfg.DatabaseDSN)
+	connPool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create db pool connection: %w", err)
 	}
