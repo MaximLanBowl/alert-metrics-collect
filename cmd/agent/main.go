@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/agent"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
@@ -21,8 +24,12 @@ func run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
 	collector := agent.NewMemCollect(cfg)
-	collector.Run()
+	collector.Run(ctx)
+	collector.Close()
 
 	return nil
 }

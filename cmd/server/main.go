@@ -97,7 +97,7 @@ func run() error {
 
 	h.Metrics.StartAutoSave()
 
-	r := router.New(h)
+	r := router.New(h, cfg.Server.SecretKey)
 
 	zlog.Info().
 		Str("addr", cfg.Server.Address).

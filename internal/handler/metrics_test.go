@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/middleware"
 	models "github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/repository"
 	"github.com/go-chi/chi/v5"
@@ -440,5 +441,52 @@ func TestMetricsHandler_GetMetricsByValue(t *testing.T) {
 				t.Errorf("wrong status code: got %v want %v", w.Code, tt.status)
 			}
 		})
+	}
+}
+
+func TestSHA256(t *testing.T) {
+	body := []byte(`{"hello": "world"}`)
+	key := "secret"
+
+	tests := []struct {
+		name       string
+		hash       string
+		statusCode int
+	}{
+		{
+			name:       "valid hash",
+			hash:       middleware.CalcHash(body, key),
+			statusCode: http.StatusOK,
+		},
+		{
+			name:       "invalid hash",
+			hash:       "wrong_hash",
+			statusCode: http.StatusBadRequest,
+		},
+		{
+			name:       "empty hash",
+			hash:       "",
+			statusCode: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/testsha/", bytes.NewReader(body))
+
+		if tt.hash != "" {
+			req.Header.Set("HashSHA256", tt.hash)
+		}
+
+		r := chi.NewRouter()
+		r.Use(middleware.HashSH256(key))
+		r.Post("/testsha/", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+		r.ServeHTTP(w, req)
+
+		if w.Code != tt.statusCode {
+			t.Errorf("wrong status code: got %v want %v", w.Code, tt.statusCode)
+		}
 	}
 }
