@@ -147,7 +147,7 @@ func TestMemCollect_Batch(t *testing.T) {
 	}
 	m.mu.Unlock()
 
-	m.Add()
+	m.Add(t.Context())
 
 	select {
 	case <-t.Context().Done():

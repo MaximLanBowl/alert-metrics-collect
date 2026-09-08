@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/crypto"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/middleware"
 	models "github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/repository"
@@ -455,7 +456,7 @@ func TestSHA256(t *testing.T) {
 	}{
 		{
 			name:       "valid hash",
-			hash:       middleware.CalcHash(body, key),
+			hash:       crypto.CalcHash(body, key),
 			statusCode: http.StatusOK,
 		},
 		{
@@ -466,7 +467,7 @@ func TestSHA256(t *testing.T) {
 		{
 			name:       "empty hash",
 			hash:       "",
-			statusCode: http.StatusOK,
+			statusCode: http.StatusBadRequest,
 		},
 	}
 

@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/rand/v2"
@@ -16,6 +13,7 @@ import (
 	"time"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/crypto"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/wrappers"
 	"github.com/rs/zerolog/log"
@@ -262,7 +260,7 @@ func (m *MemCollect) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(m.reportInterval):
-			m.Add()
+			m.Add(ctx)
 			log.Info().Msg("Metrics add")
 		}
 	}
@@ -283,7 +281,7 @@ func (m *MemCollect) flush(metrics []models.Metrics) error {
 		return fmt.Errorf("failed to marshal metrics: %w", err)
 	}
 
-	hashStr := m.calcHash(body, m.secretKey)
+	hashStr := crypto.CalcHash(body, m.secretKey)
 
 	cmpr, err := compress(body)
 	if err != nil {
@@ -325,7 +323,7 @@ func (m *MemCollect) flush(metrics []models.Metrics) error {
 	return nil
 }
 
-func (m *MemCollect) Add() {
+func (m *MemCollect) Add(ctx context.Context) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -353,16 +351,15 @@ func (m *MemCollect) Add() {
 		return
 	}
 
-	m.jobs <- batch
+	select {
+	case <-ctx.Done():
+		return
+	case m.jobs <- batch:
+		log.Debug().Msg("metrics sent to jobs channel")
+	}
 }
 
 func (m *MemCollect) Close() {
 	close(m.jobs)
 	m.wg.Wait()
-}
-
-func (m *MemCollect) calcHash(data []byte, key string) string {
-	h := hmac.New(sha256.New, []byte(key))
-	h.Write(data)
-	return hex.EncodeToString(h.Sum(nil))
 }
