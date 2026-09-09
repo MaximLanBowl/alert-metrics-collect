@@ -8,6 +8,7 @@ import (
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
 	"github.com/rs/zerolog/log"
+	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,6 +18,7 @@ func TestMemCollect(t *testing.T) {
 		ReportInterval: 10,
 		PollInterval:   2,
 		SecretKey:      "",
+		RateLimit:      30,
 	})
 
 	m.collect()
@@ -42,12 +44,55 @@ func TestMemCollect(t *testing.T) {
 	}
 }
 
+func TestCollectCPU(t *testing.T) {
+	m := NewMemCollect(config.AgentConfig{
+		Address:        "localhost:8080",
+		ReportInterval: 10,
+		PollInterval:   2,
+		SecretKey:      "",
+		RateLimit:      30,
+	})
+
+	percentCPU, err := cpu.Percent(0, true)
+	if err != nil {
+		t.Errorf("error getting CPU percent: %v", err)
+	}
+	numCPU := len(percentCPU)
+
+	m.collectMemCPU()
+
+	memory := []string{
+		"TotalMemory", "FreeMemory",
+	}
+	for _, mt := range memory {
+		if _, ok := m.gauges[mt]; !ok {
+			t.Errorf("metric %s not found", mt)
+		}
+	}
+
+	for i := 1; i <= numCPU; i++ {
+		name := fmt.Sprintf("CPUutilization%d", i)
+		if _, ok := m.gauges[name]; !ok {
+			t.Errorf("metric %s not found", name)
+		}
+	}
+
+	expectedTotal := len(memory) + numCPU
+
+	if len(m.gauges) != expectedTotal {
+		t.Errorf("expected %d metrics, got %d", expectedTotal, len(m.gauges))
+	}
+
+	t.Log("CPU AND Memory Gauges:", m.gauges)
+}
+
 func TestPollCountIncrements(t *testing.T) {
 	m := NewMemCollect(config.AgentConfig{
 		Address:        "localhost:8080",
 		ReportInterval: 10,
 		PollInterval:   2,
 		SecretKey:      "",
+		RateLimit:      30,
 	})
 
 	m.collect()
@@ -92,6 +137,7 @@ func TestMemCollect_Batch(t *testing.T) {
 		ReportInterval: 10,
 		PollInterval:   2,
 		SecretKey:      "",
+		RateLimit:      30,
 	})
 
 	m.mu.Lock()
@@ -101,12 +147,12 @@ func TestMemCollect_Batch(t *testing.T) {
 	}
 	m.mu.Unlock()
 
-	m.Add()
+	m.Add(t.Context())
 
 	select {
 	case <-t.Context().Done():
 		t.Errorf("Timeout waiting for batch: %v", t.Context().Err())
-	case batch := <-m.mtBatch:
+	case batch := <-m.jobs:
 		if len(batch) != 100 {
 			t.Errorf("invalid batch length, got %d, expected %d", len(batch), 100)
 		}

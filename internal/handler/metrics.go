@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/config"
-	"github.com/MaximLanBowl/alert-metrics-collect/internal/middleware"
+	"github.com/MaximLanBowl/alert-metrics-collect/internal/crypto"
 	"github.com/MaximLanBowl/alert-metrics-collect/internal/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
@@ -132,7 +132,7 @@ func (m *MetricsHandler) UpdateMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if m.cfg.SecretKey != "" {
-		w.Header().Set("HashSHA256", middleware.CalcHash(resp, m.cfg.SecretKey))
+		w.Header().Set("HashSHA256", crypto.CalcHash(resp, m.cfg.SecretKey))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -185,7 +185,7 @@ func (m *MetricsHandler) UpdateMetricsBatch(w http.ResponseWriter, r *http.Reque
 	}
 
 	if m.cfg.SecretKey != "" {
-		w.Header().Set("HashSHA256", middleware.CalcHash(buf.Bytes(), m.cfg.SecretKey))
+		w.Header().Set("HashSHA256", crypto.CalcHash(buf.Bytes(), m.cfg.SecretKey))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -215,7 +215,7 @@ func (m *MetricsHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		respBody := strconv.FormatFloat(value, 'f', -1, 64)
 
 		if m.cfg.SecretKey != "" {
-			w.Header().Set("HashSHA256", middleware.CalcHash([]byte(respBody), m.cfg.SecretKey))
+			w.Header().Set("HashSHA256", crypto.CalcHash([]byte(respBody), m.cfg.SecretKey))
 		}
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte(respBody)); err != nil {
@@ -232,7 +232,7 @@ func (m *MetricsHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		respBody := strconv.FormatInt(value, 10)
 
 		if m.cfg.SecretKey != "" {
-			w.Header().Set("HashSHA256", middleware.CalcHash([]byte(respBody), m.cfg.SecretKey))
+			w.Header().Set("HashSHA256", crypto.CalcHash([]byte(respBody), m.cfg.SecretKey))
 		}
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write([]byte(respBody)); err != nil {
@@ -263,7 +263,7 @@ func (m *MetricsHandler) GetMetricsList(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if m.cfg.SecretKey != "" {
-		w.Header().Set("HashSHA256", middleware.CalcHash(buf.Bytes(), m.cfg.SecretKey))
+		w.Header().Set("HashSHA256", crypto.CalcHash(buf.Bytes(), m.cfg.SecretKey))
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -303,7 +303,7 @@ func (m *MetricsHandler) GetMetricsByValue(w http.ResponseWriter, r *http.Reques
 	}
 
 	if m.cfg.SecretKey != "" {
-		w.Header().Set("HashSHA256", middleware.CalcHash(resp, m.cfg.SecretKey))
+		w.Header().Set("HashSHA256", crypto.CalcHash(resp, m.cfg.SecretKey))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
